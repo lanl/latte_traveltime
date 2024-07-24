@@ -64,5 +64,5 @@ We welcome feedbacks, bug reports, and improvement ideas on `LATTE`.
 
 If you use this package in your research and find it useful, please cite it as
 
-* Kai Gao, Ting Chen, 2024, LATTE: Los Alamos TravelTime package based on Eikonal equation, url: [github.com/lanl/latte](https://github.com/lanl/latte)
+* Kai Gao, Ting Chen, 2024, LATTE: Los Alamos TravelTime package based on Eikonal equation, url: [github.com/lanl/latte](https://github.com/lanl/latte_traveltime)
 * Kai Gao, Ting Chen, 2024, LATTE: Open-source, high-performance acoustic and elastic traveltime computation, tomography, and source location, _under review_. 

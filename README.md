@@ -10,7 +10,7 @@ The work is under LANL open source approval reference O4770.
 # Reference
 Please refer to our submitted manuscript [LA-UR-24-27806](doc/manuscript_submitted_gji.pdf) for details. 
 
-A mannual will be released in the near future pending separate approval.
+A manual will be released in the near future pending separate approval.
 
 # Requirement
 `LATTE` depends on [FLIT](https://github.com/lanl/flit). Some examples in [example](example) use [RGM](https://github.com/lanl/rgm) to generate random geological models. 

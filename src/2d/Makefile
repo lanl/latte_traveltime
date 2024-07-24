@@ -74,9 +74,11 @@ exec4 = $(bindir)/x_tloc2
 all: makedir $(exec1) $(exec2) $(exec3) $(exec4)
 
 # options
-include $(HOME)/src/__libflit/src/Makefile.in
-inc = $(base_inc) -I$(HOME)/src/__libflit/lib
-lflags = $(HOME)/src/__libflit/lib/libflit.a $(base_lflags)
+flitdir = $(HOME)/src/libflit
+
+include $(flitdir)/src/Makefile.in
+inc = $(base_inc) -I$(flitdir)/lib
+lflags = $(flitdir)/lib/libflit.a $(base_lflags)
 fflags = $(base_fflags) -Ddim2=1 -Dparallel_sweeping=1 \
 	# -O0 -g -check bounds
 

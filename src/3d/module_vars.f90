@@ -126,10 +126,11 @@ contains
             end if
 
             ! if the inversion starts from certain iteration other than 1
-            if (present(update) .and. update == .false.) then
-                update_this_model = .false.
-            else
-                update_this_model = .true.
+            update_this_model = .true.
+            if (present(update)) then
+                if (.not.update) then
+                    update_this_model = .false.
+                end if
             end if
 
             if (resume_from_iter > 1 .and. update_this_model) then

@@ -13,7 +13,7 @@ A manual will be released in the near future pending separate approval.
 # Requirement
 `LATTE` depends on [FLIT](https://github.com/lanl/flit). Some examples in [example](example) use [RGM](https://github.com/lanl/rgm) to generate random geological models. 
 
-The code is written in Fortran. Currently, it only support Intel's Fortran compiler, which is freely available through [Intel oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html#gs.bed72v) and [Intel HPC Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/hpc-toolkit.html#gs.bed5op). 
+The code is written in Fortran. Currently, it only support Intel's Fortran compiler, which is freely available through [Intel oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html#gs.bed72v) and [Intel HPC Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/hpc-toolkit.html#gs.bed5op). We tested `LATTE` with ifort 2021.10 and ifx 2024.2. The default compiler set by the [Makefile for 2D](src/2d/Makefile) and [Makefile for 3D](src/3d/Makefile) is ifx 2024.2 (the newest version of the compiler suite). Note that per Intel's announcement, [ifort will be deprecated starting from late 2024](https://www.intel.com/content/www/us/en/developer/articles/guide/porting-guide-for-ifort-to-ifx.html). 
 
 # Use
 To install `LATTE`, 

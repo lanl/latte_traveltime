@@ -521,6 +521,7 @@ contains
         character(len=1024) :: shot_file_geometry, dir_geometry
         logical, allocatable, dimension(:) :: qs
         integer, allocatable, dimension(:) :: usid
+        type(source_receiver_geometry), allocatable, dimension(:) :: g
 
         if (rankid == 0) then
             call warn(date_time_compact()//' Loading geometry... ')
@@ -566,6 +567,11 @@ contains
             if (ny == 1) then
                 gmtr(i)%srcr(:)%y = 0.5*(ymin + ymax)
                 gmtr(i)%recr(:)%y = 0.5*(ymin + ymax)
+            end if
+
+            if ((mod(i, max(nint(ns/10.0), 1)) == 0 .or. i == ns .or. i == 1) .and. &
+                    rankid == 0) then
+                call warn(date_time_compact()//' Loading geometry '//num2str(i)//' of '//num2str(ns))
             end if
 
         end do
@@ -628,11 +634,6 @@ contains
                 gmtr(i)%nr = 0
             end if
 
-            if ((mod(i, max(nint(ns/10.0), 1)) == 0 .or. i == ns .or. i == 1) .and. &
-                    rankid == 0) then
-                call warn(date_time_compact()//' Loading geometry '//num2str(i)//' of '//num2str(ns))
-            end if
-
         end do
 
         ! Remove common-shot gathers that are not qualified
@@ -693,7 +694,20 @@ contains
         end if
 
         ! Select all qualified shots
-        gmtr = pack(gmtr, mask=qs)
+        allocate(g(1:ns))
+        l = 1
+        do i = 1, ns
+            if (qs(i)) then
+                g(l) = gmtr(i)
+                l = l + 1
+            end if
+        end do
+
+        gmtr = g(1:l - 1)
+
+        ! The following pack(gmtr) works with ifort, but not new ifx...
+        ! To avoid potential segmentation fault, use the above hard way to pack
+        !        gmtr = pack(gmtr, mask=qs)
         ns = size(gmtr)
 
         ! If any duplicate source id, then stop

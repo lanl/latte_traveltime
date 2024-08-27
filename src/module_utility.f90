@@ -600,13 +600,15 @@ contains
                     ! thus dd does not apply and must use ad to invert for t0,
                     ! even if in rare cases, t0 are same for all real sources (virtual receivers)
                     !
-                    if (tobs_all(j, ishot) >= 0) then
-                        do i = 1, ns
+                    do i = 1, ns
+                        ! For observed data, some traces must be negative (i.e., no data). In this case, the
+                        ! summation only applies to traces that have data
+                        if (tobs_all(j, ishot) >= 0 .and. tobs_all(j, i) >= 0) then
                             d = (tsyn_all(j, ishot) - tsyn_all(j, i)) - (tobs_all(j, ishot) - tobs_all(j, i))
                             ttp_residual(j, 1) = ttp_residual(j, 1) + d
                             ttp_misfit(j, 1) = ttp_misfit(j, 1) + d**2
-                        end do
-                    end if
+                        end if
+                    end do
                 end if
             end do
             !$omp end parallel do

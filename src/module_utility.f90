@@ -531,7 +531,7 @@ contains
                     if (maxval(tsyn(:, i)) > 0 .and. maxval(tobs(:, i)) > 0) then
                         do j = 1, nr
                             ! If a value of field record is negative, then ignore
-                            if (tobs(j, i) >= 0) then
+                            if (tobs(j, i) >= 0 .and. tobs(k, i) >= 0) then
                                 do k = 1, nr
                                     d = (tsyn(j, i) - tsyn(k, i)) - (tobs(j, i) - tobs(k, i))
                                     tresidual(j, i) = tresidual(j, i) + d

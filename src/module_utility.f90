@@ -600,11 +600,13 @@ contains
                     ! thus dd does not apply and must use ad to invert for t0,
                     ! even if in rare cases, t0 are same for all real sources (virtual receivers)
                     !
-                    do i = 1, ns
-                        d = (tsyn_all(j, ishot) - tsyn_all(j, i)) - (tobs_all(j, ishot) - tobs_all(j, i))
-                        ttp_residual(j, 1) = ttp_residual(j, 1) + d
-                        ttp_misfit(j, 1) = ttp_misfit(j, 1) + d**2
-                    end do
+                    if (tobs_all(j, ishot) >= 0) then
+                        do i = 1, ns
+                            d = (tsyn_all(j, ishot) - tsyn_all(j, i)) - (tobs_all(j, ishot) - tobs_all(j, i))
+                            ttp_residual(j, 1) = ttp_residual(j, 1) + d
+                            ttp_misfit(j, 1) = ttp_misfit(j, 1) + d**2
+                        end do
+                    end if
                 end if
             end do
             !$omp end parallel do

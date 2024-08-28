@@ -291,27 +291,67 @@ contains
         real, allocatable, dimension(:, :) :: seis_obs, seis_syn, seis_syn_prev
         real, allocatable, dimension(:, :) :: weight
         real, allocatable, dimension(:, :) :: r1, r2, m1, m2
+        real, allocatable, dimension(:, :) :: tobs_all, tsyn_all, tsyn_all_prev
 
-        ! Setup filename prefix and filenames
-        filename = '/shot_'//num2str(gmtr(srcindex)%id)//'_'//'traveltime_'//tidy(component_name)//'.bin'
+        if (yn_dd_no_st0) then
 
-        ! Observed data
-        file_recorded = dir_iter_record(iter)//tidy(filename)
+            ! Setup filename prefix and filenames
+            filename = '/t'//tidy(component_name)//'_all.bin'
 
-        ! Synthetic data last iteration
-        file_synthetic_prev = dir_iter_synthetic(iter - 1)//tidy(filename)
+            ! Observed data
+            file_recorded = dir_iter_record(iter)//tidy(filename)
 
-        ! Synthetic data current iteration
-        file_synthetic = dir_iter_synthetic(iter)//tidy(filename)
+            ! Synthetic data last iteration
+            file_synthetic_prev = dir_iter_synthetic(iter - 1)//tidy(filename)
 
-        ! Read data
-        nr = gmtr(srcindex)%nr
-        seis_obs = load(file_recorded, nr, nrefl + 1)
-        seis_syn = load(file_synthetic, nr, nrefl + 1)
-        seis_syn_prev = load(file_synthetic_prev, nr, nrefl + 1)
+            ! Synthetic data current iteration
+            file_synthetic = dir_iter_synthetic(iter)//tidy(filename)
 
-        call traveltime_residual(seis_syn, seis_syn_prev, r1, m1)
-        call traveltime_residual(seis_obs, seis_syn_prev, r2, m2)
+            tobs_all = load(file_recorded, nr_virtual, ns)
+            tsyn_all_prev = load(file_synthetic_prev, nr_virtual, ns)
+            tsyn_all = load(file_synthetic, nr_virtual, ns)
+
+            ! For now only considers transmission data (no reflection)
+            nr = gmtr(srcindex)%nr
+            r1 = zeros(nr, 1)
+            r2 = zeros(nr, 1)
+            !$omp parallel do private(i, j)
+            do j = 1, nr
+                if (maxval(tsyn_all(j, :)) > 0 .and. maxval(tsyn_all_prev(j, :)) > 0 .and. maxval(tobs_all(j, :)) > 0) then
+                    do i = 1, ns
+                        if (tobs_all(j, srcindex) >= 0 .and. tobs_all(j, i) >= 0) then
+                            r1(j, 1) = r1(j, 1) + (tsyn_all_prev(j, srcindex) - tsyn_all_prev(j, i)) - (tsyn_all(j, srcindex) - tsyn_all(j, i))
+                            r2(j, 1) = r2(j, 1) + (tsyn_all_prev(j, srcindex) - tsyn_all_prev(j, i)) - (tobs_all(j, srcindex) - tobs_all(j, i))
+                        end if
+                    end do
+                end if
+            end do
+            !$omp end parallel do
+
+        else
+
+            ! Setup filename prefix and filenames
+            filename = '/shot_'//num2str(gmtr(srcindex)%id)//'_'//'traveltime_'//tidy(component_name)//'.bin'
+
+            ! Observed data
+            file_recorded = dir_iter_record(iter)//tidy(filename)
+
+            ! Synthetic data last iteration
+            file_synthetic_prev = dir_iter_synthetic(iter - 1)//tidy(filename)
+
+            ! Synthetic data current iteration
+            file_synthetic = dir_iter_synthetic(iter)//tidy(filename)
+
+            ! Read data
+            nr = gmtr(srcindex)%nr
+            seis_obs = load(file_recorded, nr, nrefl + 1)
+            seis_syn = load(file_synthetic, nr, nrefl + 1)
+            seis_syn_prev = load(file_synthetic_prev, nr, nrefl + 1)
+
+            call traveltime_residual(seis_syn, seis_syn_prev, r1, m1)
+            call traveltime_residual(seis_obs, seis_syn_prev, r2, m2)
+
+        end if
 
         weight = zeros(nr, nrefl + 1)
         !$omp parallel do private(i, j)

@@ -531,13 +531,13 @@ contains
                     if (maxval(tsyn(:, i)) > 0 .and. maxval(tobs(:, i)) > 0) then
                         do j = 1, nr
                             ! If a value of field record is negative, then ignore
-                            if (tobs(j, i) >= 0 .and. tobs(k, i) >= 0) then
-                                do k = 1, nr
+                            do k = 1, nr
+                                if (tobs(j, i) >= 0 .and. tobs(k, i) >= 0) then
                                     d = (tsyn(j, i) - tsyn(k, i)) - (tobs(j, i) - tobs(k, i))
                                     tresidual(j, i) = tresidual(j, i) + d
                                     tmisfit(j, i) = tmisfit(j, i) + d**2
-                                end do
-                            end if
+                                end if
+                            end do
                         end do
                     end if
                 end do

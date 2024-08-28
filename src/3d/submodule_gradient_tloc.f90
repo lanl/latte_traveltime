@@ -663,15 +663,38 @@ contains
 
         ! Get all data
         select case (which_medium)
-            case ('acoustic-iso')
+            case ('acoustic-iso', 'acoustic-tti')
                 call allreduce_array(tpsyn_all)
                 call allreduce_array(tpobs_all)
-            case ('elastic-iso')
+                if (rankid == 0) then
+                    call output_array(tpsyn_all, tidy(dir_synthetic)//'/tp_all.bin')
+                    if (sum(data_misfit) == 0) then
+                        call output_array(tpsyn_all, tidy(dir_iter_synthetic(0))//'/tp_all.bin')
+                    end if
+                    if (iter == 1) then
+                        call output_array(tpobs_all, tidy(dir_field)//'/tp_all.bin')
+                    end if
+                end if
+            case ('elastic-iso', 'elastic-tti')
                 call allreduce_array(tpsyn_all)
                 call allreduce_array(tpobs_all)
                 call allreduce_array(tssyn_all)
                 call allreduce_array(tsobs_all)
+                if (rankid == 0) then
+                    call output_array(tpsyn_all, tidy(dir_synthetic)//'/tp_all.bin')
+                    call output_array(tssyn_all, tidy(dir_synthetic)//'/ts_all.bin')
+                    if (sum(data_misfit) == 0) then
+                        call output_array(tpsyn_all, tidy(dir_iter_synthetic(0))//'/tp_all.bin')
+                        call output_array(tssyn_all, tidy(dir_iter_synthetic(0))//'/ts_all.bin')
+                    end if
+                    if (iter == 1) then
+                        call output_array(tpobs_all, tidy(dir_field)//'/tp_all.bin')
+                        call output_array(tsobs_all, tidy(dir_field)//'/ts_all.bin')
+                    end if
+                end if
         end select
+
+        call mpibarrier
 
         ! Resume misfit computation and if necessary, gradient computation
         do ishot = shot_in_rank(rankid, 1), shot_in_rank(rankid, 2)

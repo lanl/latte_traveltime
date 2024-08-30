@@ -332,6 +332,7 @@ contains
         character(len=1024) :: ml_model_refine, ml_src_refine
         integer :: ml_niter_refine
         real, allocatable, dimension(:) :: ml_xyz_weight
+        real :: ml_max_dist
 
         if (any_in(['sx', 'sy', 'sz', 'st0'], model_name)) then
 
@@ -418,6 +419,7 @@ contains
                         end if
                         call readpar_nfloat(file_parameter, 'reg_ml_xyz_weight', ml_xyz_weight, [1.0, 1.0])
                         call assert(size(ml_xyz_weight) == 2, ' <source_regularization> Error: size(ml_xyz_weight) must = 2')
+                        call readpar_xfloat(file_parameter, 'reg_ml_max_dist', ml_max_dist, float_huge, iter*1.0)
 
                         if (rankid == 0) then
 
@@ -489,8 +491,11 @@ contains
                                     sp = ic
                                 end if
                             end do
-                            sxr(l, 1) = fx(sp)
-                            szr(l, 1) = fz(sp)
+                            ! Only regularize if close enough
+                            if (d <= ml_max_dist) then
+                                sxr(l, 1) = fx(sp)
+                                szr(l, 1) = fz(sp)
+                            end if
                         end do
 
                 end select

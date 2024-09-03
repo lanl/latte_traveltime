@@ -19,7 +19,7 @@
 program main
 
     use libflit
-    use rgm
+    use librgm
 
     implicit none
 

@@ -2,7 +2,7 @@
 program test
 
     use libflit
-    use geological_model_2d
+    use librgm
 
     real, allocatable, dimension(:, :) :: v, r, f
     integer :: n1, n2

@@ -1,4 +1,8 @@
 
+# To keep codes clean, I have commented out the nearest-point methods, and the 
+# codes just use interpolation schemes
+# Therefore to generate the files in the below with names _neareast, you 
+# have to recompile the codes. 
 
 system "x_diff data_gradient_nearest/shot_1_traveltime_p.bin tref_gradient.bin >diff_nearest_gradient.bin "
 system "x_diff data_gradient_interp/shot_1_traveltime_p.bin tref_gradient.bin >diff_interp_gradient.bin "
@@ -25,13 +29,6 @@ end
 system "x_showmatrix -in=model/v_gradient.bin -n1=101 -size1=3.5 -size2=3.5 -d1=10 -d2=10 -label1='Depth (m)' -label2='Horizontal Position (m)' -curve=recr_gradient.txt,srcr_gradient.txt -curvestyle=scatterv,scatter* -curvesize=10,100 -curvefacecolor=k,r -curveedgecolor=none,k -curveselect=2,1 -mtick1=4 -mtick2=4 -out=recr_gradient.pdf -legend=y -unit='Velocity (m/s)' -ltickbeg=2500 -ld=250 -color=rainbowcmyk -lmtick=4 &"
 
 
-
-
-abort
-
-
-
-
 system "x_diff data3_gradient_nearest/shot_1_traveltime_p.bin tref3_gradient.bin >diff3_nearest_gradient.bin "
 system "x_diff data3_gradient_interp/shot_1_traveltime_p.bin tref3_gradient.bin >diff3_interp_gradient.bin "
 
@@ -55,16 +52,6 @@ for i in 1..1
 end
 
 system "x_showcolorbar -cmin=2.2930000E+03 -cmax=4.0730000E+03 -unit='Velocity (m/s)' -ltickbeg=2000 -lmtick=4 -lloc=bottom -ld=500 -out=v3bar.png -lwidth=3.3  &"
-
-
-abort
-
-
-
-
-
-
-
 
 
 
@@ -93,6 +80,3 @@ end
 
 system "x_showmatrix -in=model/v_homo.bin -n1=101 -size1=3.5 -size2=3.5 -d1=10 -d2=10 -label1='Depth (m)' -label2='Horizontal Position (m)' -curve=recr_homo.txt,srcr_homo.txt -curvestyle=scatterv,scatter* -curvesize=10,100 -curvefacecolor=yellow,r -curveedgecolor=none,none -curveselect=2,1 -mtick1=4 -mtick2=4 -out=recr_homo.pdf &"
 
-
-
-abort

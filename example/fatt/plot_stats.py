@@ -3,30 +3,18 @@ import warnings
 import sys
 import argparse
 import numpy as np
-import scipy as sp
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-from pathlib import Path
-warnings.filterwarnings("ignore")
-sys.path.append(str(Path.home()) + "/src/python")
-from libpy_utility import *
-from libpy_filedir import *
-from libpy_io import *
-from libpy_getpar import *
-import matplotlib as mplt
-from matplotlib import rcParams
 from scipy.stats import norm
+import matplotlib.pyplot as plt
+from python.libpy_io import *
+from python.libpy_filedir import *
+from python.libpy_utility import *
+import subprocess
 
-basefamily = "sans-serif"
-basefont = "Arial"
-fontset = "custom"
-rcParams["font.family"] = basefamily
-rcParams["font." + basefamily] = basefont
-mplt.rcParams["mathtext.fontset"] = fontset
-mplt.rcParams["mathtext.rm"] = basefont
-mplt.rcParams["mathtext.sf"] = basefont
-mplt.rcParams["mathtext.it"] = basefont + ":italic"
-mplt.rcParams["mathtext.bf"] = basefont + ":bold"
+# fonts
+set_font()
+
+plt.rcParams.update({'font.size': 14})  # Replace 14 with your desired font size
+
 
 tags = ['ad', 'dd']
 
@@ -50,7 +38,7 @@ d[:, 1] = data_dd
 
 for i in regspace(0, 1, 1):
     
-    f, ax = plt.subplots(1, 1, figsize=(5, 5), squeeze=True)
+    f, ax = plt.subplots(1, 1, figsize=(4, 4), squeeze=True)
     cmin = -0.03
     cmax = 0.03
 
@@ -62,7 +50,7 @@ for i in regspace(0, 1, 1):
     lim = np.amax([np.abs(vmin), vmax]) * 1.1
     x, bins, p = ax.hist(
         data,
-        10,
+        regspace(-0.03, 0.03, 0.0025),
         density=True,
         facecolor="royalblue",
         alpha=1,
@@ -82,15 +70,15 @@ for i in regspace(0, 1, 1):
     label1 = "{:.3f}$".format(vmin)
     label2 = "{:.3f}$".format(vmax)
     ax.set_title(
-        " Error Range = [" + label1 + ", " + label2 + "]\n" + "$\mu$ = {:.3f}".format(mu) + ", " +
-        "$\sigma$ = {:.3f}".format(sigma),
+        " Error Range = [" + label1 + ", " + label2 + "]\n" + "$\\mu$ = {:.3f}".format(mu) + ", " +
+        "$\\sigma$ = {:.3f}".format(sigma),
         fontsize=14,
     )
 
     y = np.linspace(cmin, cmax, 100)
     p = norm.pdf(y, mu, sigma)
     ax.plot(y, p / np.sum(x), "r--", linewidth=2)
-    ax.set_ylabel("Normalized Count", fontsize=14)
+    ax.set_ylabel("Normalized Frequency Count", fontsize=14)
 
     plt.savefig('./fatt/misfit_stats_' + tags[i] + ".pdf", dpi=300, bbox_inches="tight", pad_inches=0.01)
-    plt.show()
+    plt.close()

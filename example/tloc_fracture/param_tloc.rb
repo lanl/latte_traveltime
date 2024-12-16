@@ -23,5 +23,6 @@ file_vp = model/vp_init.bin
 file_sx = model/sx_init.bin
 file_sz = model/sz_init.bin
 
+niter_max = 50
 misfit_type = dd
 dir_working = test_loc_dd_acoustic

@@ -23,314 +23,16 @@ module traveltime_iso
 
     implicit none
 
+    real, parameter :: huge_value = sqrt(float_huge)
+
     real, allocatable, dimension(:, :, :) :: t0, pdxt0, pdyt0, pdzt0, tt, lambda
     logical, allocatable, dimension(:, :, :) :: unknown, recrflag
 
     private
-    public :: forward_iso_fast_march
-    public :: forward_iso_fast_sweep
+    public :: forward_iso
     public :: adjoint_iso
 
 contains
-
-    function smaller_traveltime(node1, node2) result(smaller)
-
-        real, dimension(:), intent(in) :: node1, node2
-        logical :: smaller
-
-        smaller = node1(1) < node2(1)
-
-    end function smaller_traveltime
-
-    !
-    !> Solve quadratic equation associated with the factorized eikonal equation
-    !
-    subroutine solve_quadratic(i, j, k, dx, dy, dz, vx, vy, vz, f)
-
-        integer, intent(in) :: i, j, k
-        real, intent(in) :: dx, dy, dz, vx, vy, vz, f
-
-        double precision :: timeleft1, timeright1
-        double precision :: timefront1, timeback1
-        double precision :: timetop1, timebottom1
-        double precision :: t0ijk
-        double precision :: a, b, c
-        double precision :: ax, bx, cx
-        double precision :: ay, by, cy
-        double precision :: az, bz, cz
-        double precision :: sx, sy, sz, s
-        double precision :: taux, tauy, tauz
-        integer :: dirx, diry, dirz
-        double precision :: tau, alpha, beta
-
-        t0ijk = t0(i, j, k)
-        timeleft1 = t0(i - 1, j, k)*tt(i - 1, j, k)
-        timeright1 = t0(i + 1, j, k)*tt(i + 1, j, k)
-        timefront1 = t0(i, j - 1, k)*tt(i, j - 1, k)
-        timeback1 = t0(i, j + 1, k)*tt(i, j + 1, k)
-        timetop1 = t0(i, j, k - 1)*tt(i, j, k - 1)
-        timebottom1 = t0(i, j, k + 1)*tt(i, j, k + 1)
-
-        taux = float_huge
-        tauy = float_huge
-        tauz = float_huge
-
-        dirx = 0
-        if (.not. unknown(i - 1, j, k)) then
-            taux = timeleft1
-            dirx = -1
-        end if
-        if (.not. unknown(i + 1, j, k) .and. taux > timeright1) then
-            taux = timeright1
-            dirx = 1
-        end if
-
-        diry = 0
-        if (.not. unknown(i, j - 1, k)) then
-            tauy = timefront1
-            diry = -1
-        end if
-        if (.not. unknown(i, j + 1, k) .and. tauy > timeback1) then
-            tauy = timeback1
-            diry = 1
-        end if
-
-        dirz = 0
-        if (.not. unknown(i, j, k - 1)) then
-            tauz = timetop1
-            dirz = -1
-        end if
-        if (.not. unknown(i, j, k + 1) .and. tauz > timebottom1) then
-            tauz = timebottom1
-            dirz = 1
-        end if
-
-        a = 0.0
-        b = 0.0
-        c = 0.0
-        ax = 0.0
-        bx = 0.0
-        cx = 0.0
-        if (dirx /= 0) then
-            tau = t0(i + 2*dirx, j, k)*tt(i + 2*dirx, j, k)
-            alpha = 0.0
-            beta = 0.0
-            if (taux > tau .and. .not. unknown(i + 2*dirx, j, k)) then
-                alpha = pdxt0(i, j, k) - 1.5*t0ijk*dirx/dx
-                beta = -t0ijk*dirx*(tt(i + 2*dirx, j, k) - 4*tt(i + dirx, j, k))/(2*dx)
-            else
-                alpha = pdxt0(i, j, k) - t0ijk*dirx/dx
-                beta = t0ijk*dirx*tt(i + dirx, j, k)/dx
-            end if
-            ax = vx*alpha**2
-            bx = vx*2*alpha*beta
-            cx = vx*beta**2
-            a = a + ax
-            b = b + bx
-            c = c + cx
-        end if
-
-        ay = 0.0
-        by = 0.0
-        cy = 0.0
-        if (diry /= 0) then
-            tau = t0(i, j + 2*diry, k)*tt(i, j + 2*diry, k)
-            alpha = 0.0
-            beta = 0.0
-            if (tauy > tau .and. .not. unknown(i, j + 2*diry, k)) then
-                alpha = pdyt0(i, j, k) - 1.5*t0ijk*diry/dy
-                beta = -t0ijk*diry*(tt(i, j + 2*diry, k) - 4*tt(i, j + diry, k))/(2*dy)
-            else
-                alpha = pdyt0(i, j, k) - t0ijk*diry/dy
-                beta = t0ijk*diry*tt(i, j + diry, k)/dy
-            end if
-            ay = vy*alpha**2
-            by = vy*2*alpha*beta
-            cy = vy*beta**2
-            a = a + ay
-            b = b + by
-            c = c + cy
-        end if
-
-        az = 0.0
-        bz = 0.0
-        cz = 0.0
-        if (dirz /= 0) then
-            tau = t0(i, j, k + 2*dirz)*tt(i, j, k + 2*dirz)
-            alpha = 0.0
-            beta = 0.0
-            if (tauz > tau .and. .not. unknown(i, j, k + 2*dirz)) then
-                alpha = pdzt0(i, j, k) - 1.5*t0ijk*dirz/dz
-                beta = -t0ijk*dirz*(tt(i, j, k + 2*dirz) - 4*tt(i, j, k + dirz))/(2*dz)
-            else
-                alpha = pdzt0(i, j, k) - t0ijk*dirz/dz
-                beta = t0ijk*dirz*tt(i, j, k + dirz)/dz
-            end if
-            az = vz*alpha**2
-            bz = vz*2*alpha*beta
-            cz = vz*beta**2
-            a = a + az
-            b = b + bz
-            c = c + cz
-        end if
-
-        c = c - f
-        cx = cx - f
-        cy = cy - f
-        cz = cz - f
-
-        sx = (-bx + sqrt(bx**2 - 4*ax*cx))/(2*ax)
-        sy = (-by + sqrt(by**2 - 4*ay*cy))/(2*ay)
-        sz = (-bz + sqrt(bz**2 - 4*az*cz))/(2*az)
-        s = (-b + sqrt(b**2 - 4*a*c))/(2*a)
-        if (isnan(sx) .or. sx <= 0) then
-            sx = float_huge
-        end if
-        if (isnan(sy) .or. sy <= 0) then
-            sy = float_huge
-        end if
-        if (isnan(sz) .or. sz <= 0) then
-            sz = float_huge
-        end if
-        if (isnan(s) .or. s <= 0) then
-            s = float_huge
-        end if
-
-        tt(i, j, k) = min(sx, sy, sz, s)
-        unknown(i, j, k) = .false.
-
-    end subroutine solve_quadratic
-
-    !
-    !> Fast marching eikonal solver
-    !
-    subroutine forward_iso_fast_march(v, d, o, geom, t, trec)
-
-        real, dimension(:, :, :), intent(in) :: v
-        real, dimension(1:3), intent(in) :: d, o
-        type(source_receiver_geometry), intent(in) :: geom
-        real, allocatable, dimension(:, :, :), intent(out) :: t
-        real, allocatable, dimension(:, :), intent(out) :: trec
-
-        integer :: nx, ny, nz, l, isf
-        integer :: i, j, k, hi, hj, hk, ii, jj, kk
-        integer :: isx, isy, isz, irx, iry, irz
-        type(heap_float) :: wavefront
-        real :: node(1:4), v2, dx, dy, dz, ox, oy, oz
-        real, allocatable, dimension(:, :, :) :: vp
-        real :: dsx, dsy, dsz, vsource
-
-        dx = d(1)
-        dy = d(2)
-        dz = d(3)
-        ox = o(1)
-        oy = o(2)
-        oz = o(3)
-
-        vp = permute(v, 321)
-        nx = size(vp, 1)
-        ny = size(vp, 2)
-        nz = size(vp, 3)
-
-        ! Source location
-        do i = 1, geom%ns
-            if (geom%srcr(i)%amp == 1) then
-                isf = i
-                exit
-            end if
-        end do
-        isx = nint((geom%srcr(isf)%x - ox)/dx) + 1
-        isy = nint((geom%srcr(isf)%y - oy)/dy) + 1
-        isz = nint((geom%srcr(isf)%z - oz)/dz) + 1
-
-        ! Background time field
-        vsource = vp(isx, isy, isz)
-        call alloc_array(t0, [1, nx, 1, ny, 1, nz], pad=2)
-        call alloc_array(pdxt0, [1, nx, 1, ny, 1, nz], pad=2)
-        call alloc_array(pdyt0, [1, nx, 1, ny, 1, nz], pad=2)
-        call alloc_array(pdzt0, [1, nx, 1, ny, 1, nz], pad=2)
-        do k = 1 - 2, nz + 2
-            do j = 1 - 2, ny + 2
-                do i = 1 - 2, nx + 2
-                    dsx = (i - isx)*dx
-                    dsy = (j - isy)*dy
-                    dsz = (k - isz)*dz
-                    t0(i, j, k) = sqrt(dsx**2 + dsy**2 + dsz**2)/vsource
-                    pdxt0(i, j, k) = dsx/vsource**2/t0(i, j, k)
-                    pdyt0(i, j, k) = dsy/vsource**2/t0(i, j, k)
-                    pdzt0(i, j, k) = dsz/vsource**2/t0(i, j, k)
-                end do
-            end do
-        end do
-        t0(isx, isy, isz) = 0.0
-        pdxt0(isx, isy, isz) = 0.0
-        pdyt0(isx, isy, isz) = 0.0
-        pdzt0(isx, isy, isz) = 0.0
-
-        ! Multiplicative time field
-        call alloc_array(unknown, [1, nx, 1, ny, 1, nz], pad=2)
-        call alloc_array(tt, [1, nx, 1, ny, 1, nz], pad=2)
-        tt = sqrt(float_huge)
-        tt(isx, isy, isz) = 1.0
-        unknown = .true.
-        unknown(isx, isy, isz) = .false.
-
-        ! Initialize wavefront heap structure
-        call wavefront%init(nx*ny*nz, 4, smaller_traveltime)
-
-        i = isx
-        j = isy
-        k = isz
-
-        l = 1
-        ! The source point is known, therefore l < nx*ny*nz suffices
-        do while (l < nx*ny*nz)
-
-            ! Compute traveltiem at neighbour points
-            do hk = -1, 1
-                do hj = -1, 1
-                    do hi = -1, 1
-                        ii = clip(i + hi, 1, nx)
-                        jj = clip(j + hj, 1, ny)
-                        kk = clip(k + hk, 1, nz)
-                        if (unknown(ii, jj, kk) .and. abs(hi) + abs(hj) + abs(hk) == 1) then
-                            v2 = vp(ii, jj, kk)**2
-                            call solve_quadratic(ii, jj, kk, dx, dy, dz, v2, v2, v2, 1.0)
-                            call wavefront%insert([t0(ii, jj, kk)*tt(ii, jj, kk), real(ii), real(jj), real(kk)])
-                        end if
-                    end do
-                end do
-            end do
-
-            ! Remove the smallest traveltime
-            call wavefront%pop(node)
-            i = int(node(2))
-            j = int(node(3))
-            k = int(node(4))
-
-            l = l + 1
-
-        end do
-
-        call wavefront%free
-
-        t = t0(1:nx, 1:ny, 1:nz)*tt(1:nx, 1:ny, 1:nz) + geom%srcr(isf)%t0
-
-        ! Get the traveltime values at the receivers, if necessary
-        trec = zeros(geom%nr, 1)
-        do i = 1, geom%nr
-            if (geom%recr(i)%weight /= 0) then
-                irx = nint((geom%recr(i)%x - ox)/dx) + 1
-                iry = nint((geom%recr(i)%y - oy)/dy) + 1
-                irz = nint((geom%recr(i)%z - oz)/dz) + 1
-                trec(i, 1) = t(irx, iry, irz) + geom%recr(i)%t0
-            end if
-        end do
-
-        ! Transpose to output
-        t = permute(t, 321)
-
-    end subroutine forward_iso_fast_march
 
     !
     !> Solve the fast sweep scheme for the factorized eikonal equation
@@ -405,11 +107,11 @@ contains
         ! In 3D, the maximum level is nz + (ny - 1) + (nx - 1)
         do level = 1, nx + ny + nz - 2
 
-            kbeg = ifthen(level <= nx + ny, nzbeg, nzbeg + (level - (nx + ny - 1))*nzd)
-            kend = ifthen(level <= nz, nzbeg + (level - 1)*nzd, nzend)
+            kbeg = ifelse(level <= nx + ny, nzbeg, nzbeg + (level - (nx + ny - 1))*nzd)
+            kend = ifelse(level <= nz, nzbeg + (level - 1)*nzd, nzend)
 
-            jbeg = ifthen(level <= nx + ny, nybeg, nybeg + (level - (nx + ny - 1))*nyd)
-            jend = ifthen(level <= ny, nybeg + (level - 1)*nyd, nyend)
+            jbeg = ifelse(level <= nx + ny, nybeg, nybeg + (level - (nx + ny - 1))*nyd)
+            jend = ifelse(level <= ny, nybeg + (level - 1)*nyd, nyend)
 
             !$omp parallel do private(i, j, k, &
                 !$omp signx, signy, signz, &
@@ -555,7 +257,7 @@ contains
 
                     end if
 
-                    if (taux == float_huge .and. tauy == float_huge .and. tauz == float_huge) then
+                    if (taux == huge_value .and. tauy == huge_value .and. tauz == huge_value) then
                         cycle
                     end if
 
@@ -573,7 +275,7 @@ contains
                     array_t0 = [t0x, t0y, t0z]
                     array_sign = [signx, signy, signz]
 
-                    if (u(1) == float_huge .and. u(2) == float_huge .and. u(3) == float_huge) then
+                    if (u(1) == huge_value .and. u(2) == huge_value .and. u(3) == huge_value) then
                         cycle
                     end if
 
@@ -654,7 +356,7 @@ contains
                             ! In this case, the order of u no long matters, and for convenience
                             ! here I just use the x-y-z notation to avoid more new symbols
 
-                            ! Sovling the quadratic equation analytically
+                            ! Solve the quadratic equation analytically
                             root = (dx*dydy*dzdz*px0c*signx*t0c*taux*v2 + dydy*dzdz*signx**2*t0c**2*taux*v2 + &
                                 dxdx*t0c*(dzdz*signy*(dy*py0c + signy*t0c)*tauy + dydy*signz*(dz*pz0c + signz*t0c)*tauz)*v2 + &
                                 dxdx*dydy*dzdz*sqrt(v2*(((dzdz*t0c*(dydy*signx*(dx*px0c + signx*t0c)*taux + &
@@ -741,18 +443,18 @@ contains
         ! In 3D, the maximum level is n3 + (n2 - 1) + (n1 - 1)
         do level = 1, n1 + n2 + n3 - 2
 
-            kbeg = ifthen(level <= n1 + n2, n3beg, n3beg + (level - (n1 + n2 - 1))*n3d)
-            kend = ifthen(level <= n3, n3beg + (level - 1)*n3d, n3end)
+            kbeg = ifelse(level <= n1 + n2, n3beg, n3beg + (level - (n1 + n2 - 1))*n3d)
+            kend = ifelse(level <= n3, n3beg + (level - 1)*n3d, n3end)
 
-            jbeg = ifthen(level <= n1 + n2, n2beg, n2beg + (level - (n1 + n2 - 1))*n2d)
-            jend = ifthen(level <= n2, n2beg + (level - 1)*n2d, n2end)
+            jbeg = ifelse(level <= n1 + n2, n2beg, n2beg + (level - (n1 + n2 - 1))*n2d)
+            jend = ifelse(level <= n2, n2beg + (level - 1)*n2d, n2end)
 
-            !$omp parallel do private(i, j, k, &
+            !$omp parallel do private(i, j, k, i1, i2, j1, j2, k1, k2, &
                 !$omp app, amp, apm, amm, &
                 !$omp bpp, bmp, bpm, bmm, &
                 !$omp cpp, cmp, cpm, cmm, &
                 !$omp ap, am, bp, bm, cp, cm, &
-                !$omp lhs, rhs, t) collapse(2) schedule(dynamic)
+                !$omp lhs, rhs, t) collapse(2)
             do k = kbeg, kend, n3d
                 do j = jbeg, jend, n2d
 
@@ -873,12 +575,12 @@ contains
         double precision :: px0c, py0c, pz0c
         double precision :: v2
         double precision :: u(3), d(3), array_tauc(3), array_tau(3), array_p0(3), array_t0(3), array_sign(3)
-        double precision :: da, db !, dc
-        double precision :: signa, signb !, signc
-        double precision :: dadt, dbdt !, dcdt
+        double precision :: da, db
+        double precision :: signa, signb
+        double precision :: dadt, dbdt
         double precision :: taua, taub, t0a, t0b
-        double precision :: tauca, taucb !, taucd
-        double precision :: pa0c, pb0c !, pc0c
+        double precision :: tauca, taucb
+        double precision :: pa0c, pb0c
         double precision :: travel
         integer :: i1, i2, j1, j2, k1, k2
         double precision :: dada, dbdb, dxdx, dydy, dzdz
@@ -1027,7 +729,7 @@ contains
 
                     end if
 
-                    if (taux == float_huge .and. tauy == float_huge .and. tauz == float_huge) then
+                    if (taux == huge_value .and. tauy == huge_value .and. tauz == huge_value) then
                         cycle
                     end if
 
@@ -1045,7 +747,7 @@ contains
                     array_t0 = [t0x, t0y, t0z]
                     array_sign = [signx, signy, signz]
 
-                    if (u(1) == float_huge .and. u(2) == float_huge .and. u(3) == float_huge) then
+                    if (u(1) == huge_value .and. u(2) == huge_value .and. u(3) == huge_value) then
                         cycle
                     end if
 
@@ -1126,7 +828,7 @@ contains
                             ! In this case, the order of u no long matters, and for convenience
                             ! here I just use the x-y-z notation to avoid more new symbols
 
-                            ! Sovling the quadratic equation analytically
+                            ! Solve the quadratic equation analytically
                             root = (dx*dydy*dzdz*px0c*signx*t0c*taux*v2 + dydy*dzdz*signx**2*t0c**2*taux*v2 + &
                                 dxdx*t0c*(dzdz*signy*(dy*py0c + signy*t0c)*tauy + dydy*signz*(dz*pz0c + signz*t0c)*tauz)*v2 + &
                                 dxdx*dydy*dzdz*sqrt(v2*(((dzdz*t0c*(dydy*signx*(dx*px0c + signx*t0c)*taux + &
@@ -1301,7 +1003,9 @@ contains
     !
     !> Fast sweeping factorized eikonal solver
     !
-    subroutine forward_iso_fast_sweep(v, d, o, geom, t, trec)
+    subroutine forward_iso(v, d, o, geom, t, trec)
+
+        use omp_lib
 
         real, dimension(:, :, :), intent(in) :: v
         real, dimension(1:3), intent(in) :: d, o
@@ -1311,10 +1015,12 @@ contains
 
         real, allocatable, dimension(:, :, :) :: tt, tt_prev, vp
         real :: dx, dy, dz, ox, oy, oz
-        integer :: nx, ny, nz, niter, i, j, k, l, isx, isy, isz, irx, iry, irz
+        integer :: nx, ny, nz, niter, i, j, k, l, isx, isy, isz, irx, iry, irz, itx, ity, itz
         real, allocatable, dimension(:) :: t1, t2, t3, t4
         real :: ttdiff, vsource, dsx, dsy, dsz
-        integer :: imin
+        integer :: imin, sw
+        logical, allocatable, dimension(:) :: source_inside, receiver_inside
+        !        real :: time1, time2
 
         dx = d(1)
         dy = d(2)
@@ -1328,13 +1034,35 @@ contains
         ny = size(vp, 2)
         nz = size(vp, 3)
 
+        ! Check if sources are at zero-velocity points
+        source_inside = falses(geom%ns)
+        !$omp parallel do private(l)
+        do l = 1, geom%ns
+            if (geom%srcr(l)%amp == 1) then
+                source_inside(l) = point_in_domain([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z], &
+                    [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)
+            end if
+        end do
+        !$omp end parallel do
+
+        ! Check if receivers are at zero-velocity points
+        receiver_inside = falses(geom%nr)
+        !$omp parallel do private(i)
+        do i = 1, geom%nr
+            if (geom%recr(i)%weight /= 0) then
+                receiver_inside(i) = point_in_domain([geom%recr(i)%x, geom%recr(i)%y, geom%recr(i)%z], &
+                    [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)
+            end if
+        end do
+        !$omp end parallel do
+
         t0 = zeros(nx, ny, nz)
         pdxt0 = zeros(nx, ny, nz)
         pdyt0 = zeros(nx, ny, nz)
         pdzt0 = zeros(nx, ny, nz)
 
         ! Source location
-        t1 = zeros(geom%ns) + sqrt(float_huge)
+        t1 = zeros(geom%ns) + huge_value
         t2 = zeros_like(t1)
         t3 = zeros_like(t1)
         t4 = zeros_like(t1)
@@ -1347,15 +1075,24 @@ contains
 
                     do l = 1, geom%ns
 
-                        if (geom%srcr(l)%amp == 1) then
+                        if (source_inside(l)) then
 
-                            isx = nint((geom%srcr(l)%x - ox)/dx) + 1
-                            isy = nint((geom%srcr(l)%y - oy)/dy) + 1
-                            isz = nint((geom%srcr(l)%z - oz)/dz) + 1
-                            vsource = vp(isx, isy, isz)
-                            dsx = (i - isx)*dx
-                            dsy = (j - isy)*dy
-                            dsz = (k - isz)*dz
+                            ! Linear interpolation to get velocity at the source position
+                            vsource = get_point_value_inside([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z], &
+                                [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)
+
+                            dsx = ox + (i - 1)*dx - geom%srcr(l)%x
+                            dsy = oy + (j - 1)*dy - geom%srcr(l)%y
+                            dsz = oz + (k - 1)*dz - geom%srcr(l)%z
+
+                            !                            ! In comparison, the nearest grid point apporach
+                            !                            isx = nint((geom%srcr(l)%x - ox)/dx) + 1
+                            !                            isy = nint((geom%srcr(l)%y - oy)/dy) + 1
+                            !                            isz = nint((geom%srcr(l)%z - oz)/dz) + 1
+                            !                            vsource = vp(isx, isy, isz)
+                            !                            dsx = (i - isx)*dx
+                            !                            dsy = (j - isy)*dy
+                            !                            dsz = (k - isz)*dz
 
                             t1(l) = sqrt(dsx**2 + dsy**2 + dsz**2)/vsource
                             if (t1(l) == 0) then
@@ -1385,22 +1122,49 @@ contains
         end do
         !$omp end parallel do
 
+        ! Initialize the multiplicative time field
         tt_prev = zeros(nx, ny, nz)
-        tt = zeros(nx, ny, nz) + sqrt(float_huge)
-        !$omp parallel do private(i, isx, isy, isz)
+        tt = zeros(nx, ny, nz) + huge_value
+        ! Increase the width of the multiplicative field around the source
+        ! in the initialization seems to significantly improve the resulting accuracy,
+        ! especially when the source point is not on an integer grid point
+        sw = 3
+        !$omp parallel do private(i, isx, isy, isz, itx, ity, itz)
         do i = 1, geom%ns
-            if (geom%srcr(i)%amp == 1) then
-                isx = nint((geom%srcr(i)%x - ox)/dx) + 1
-                isy = nint((geom%srcr(i)%y - oy)/dy) + 1
-                isz = nint((geom%srcr(i)%z - oz)/dz) + 1
-                tt(isx, isy, isz) = 1.0
+            if (source_inside(i)) then
+                isx = max(floor((geom%srcr(i)%x - ox)/dx) + 1 - sw, 1)
+                isy = max(floor((geom%srcr(i)%y - oy)/dy) + 1 - sw, 1)
+                isz = max(floor((geom%srcr(i)%z - oz)/dz) + 1 - sw, 1)
+                itx = min(ceiling((geom%srcr(i)%x - ox)/dx) + 1 + sw, nx)
+                ity = min(ceiling((geom%srcr(i)%y - oy)/dy) + 1 + sw, ny)
+                itz = min(ceiling((geom%srcr(i)%z - oz)/dz) + 1 + sw, nz)
+                tt(isx:itx, isy:ity, isz:itz) = 1.0
             end if
         end do
         !$omp end parallel do
 
+        !        ! As a comparison, the nearest grid point approach is
+        !        !$omp parallel do private(i, isx, isy, isz, itx, ity, itz)
+        !        do i = 1, geom%ns
+        !            if (source_inside(i)) then
+        !                isx = nint((geom%srcr(i)%x - ox)/dx) + 1
+        !                isy = nint((geom%srcr(i)%y - oy)/dy) + 1
+        !                isz = nint((geom%srcr(i)%z - oz)/dz) + 1
+        !                tt(isx, isy, isz) = 1.0
+        !            end if
+        !        end do
+        !        !$omp end parallel do
+
         ! Fast sweeping via Gauss-Seidel iterations
         niter = 0
-        ttdiff = sqrt(float_huge)
+        ttdiff = huge_value
+        where (vp == 0)
+            vp = float_tiny
+        end where
+
+        !        ! For timing the modeling, commented out for clarity
+        !        call cpu_time(time1)
+
         do while (ttdiff >= sweep_stop_threshold .and. niter < sweep_niter_max)
 
             tt_prev = tt
@@ -1418,17 +1182,56 @@ contains
 
         end do
 
+        !        ! For timing the modeling, commented out for clarity
+        !        call cpu_time(time2)
+        !        if (file_exists('./time3.txt')) then
+        !            open(3, file='./time3.txt', position='append')
+        !        else
+        !            open(3, file='./time3.txt')
+        !        end if
+        !        write (3, *) time2 - time1
+        !        close(3)
+
         t = t0*tt
+        where (vp == float_tiny)
+            t = 0
+            vp = 0
+        end where
 
         ! Get the traveltime values at the receivers, if necessary
         trec = zeros(geom%nr, 1)
-        !$omp parallel do private(i, irx, iry, irz)
+        !$omp parallel do private(i, irx, iry, irz, l, vsource, dsx, dsy, dsz)
         do i = 1, geom%nr
-            if (geom%recr(i)%weight /= 0) then
-                irx = nint((geom%recr(i)%x - ox)/dx) + 1
-                iry = nint((geom%recr(i)%y - oy)/dy) + 1
-                irz = nint((geom%recr(i)%z - oz)/dz) + 1
-                trec(i, 1) = t(irx, iry, irz) + geom%recr(i)%t0
+            if (receiver_inside(i)) then
+
+                ! Linear interpolation; same as for the source points,
+                ! here the implementation automatically handles the case of
+                ! a receiver falling on integer grid points.
+                trec(i, 1) = get_point_value_inside([geom%recr(i)%x, geom%recr(i)%y, geom%recr(i)%z], &
+                    [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], t)
+                do l = 1, geom%ns
+                    if (source_inside(l)) then
+                        if (within_the_same_grid([geom%recr(i)%x, geom%recr(i)%y, geom%recr(i)%z], &
+                                [geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z], [ox, oy, oz], [dx, dy, dz])) then
+                            vsource = get_point_value_inside([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z], &
+                                [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)
+                            dsx = geom%recr(i)%x - geom%srcr(l)%x
+                            dsy = geom%recr(i)%y - geom%srcr(l)%y
+                            dsz = geom%recr(i)%z - geom%srcr(l)%z
+                            trec(i, 1) = sqrt(dsx**2 + dsy**2 + dsz**2)/vsource + geom%srcr(l)%t0
+                        end if
+                    end if
+                end do
+
+                ! Add virtual receiver time for TLOC
+                trec(i, 1) = trec(i, 1) + geom%recr(i)%t0
+
+                !                ! As a comparison, the nearest grid point approach is
+                !                irx = nint((geom%recr(i)%x - ox)/dx) + 1
+                !                iry = nint((geom%recr(i)%y - oy)/dy) + 1
+                !                irz = nint((geom%recr(i)%z - oz)/dz) + 1
+                !                trec(i, 1) = t(irx, iry, irz) + geom%recr(i)%t0
+
             end if
         end do
         !$omp end parallel do
@@ -1438,7 +1241,7 @@ contains
         call warn(date_time_compact()//' Fast sweeping eikonal niter = '//num2str(niter)// &
             ', relative diff = '//num2str(ttdiff, '(es)'))
 
-    end subroutine forward_iso_fast_sweep
+    end subroutine forward_iso
 
     !
     !> Compute adjoint field for FATT
@@ -1452,7 +1255,7 @@ contains
         real, dimension(:, :, :), allocatable, intent(out) :: tadj
 
         real, allocatable, dimension(:, :, :) :: vp, lambda_prev
-        integer :: nx, ny, nz, iter, i, irx, iry, irz
+        integer :: nx, ny, nz, iter, i, irx, iry, irz !, j, k
         real :: lambda_diff, dx, dy, dz, ox, oy, oz
 
         dx = d(1)
@@ -1469,22 +1272,40 @@ contains
         nz = size(tt, 3)
 
         recrflag = falses(nx, ny, nz)
-        lambda = zeros(nx, ny, nz) + sqrt(float_huge)
+        lambda = zeros(nx, ny, nz)
         lambda_prev = zeros(nx, ny, nz)
-        lambda_diff = sqrt(float_huge)
+        lambda_diff = huge_value
 
         ! Get the misfit values at the receivers
-        !$omp parallel do private(i, irx, iry, irz)
         do i = 1, geom%nr
             if (geom%recr(i)%weight /= 0) then
                 irx = nint((geom%recr(i)%x - ox)/dx) + 1
                 iry = nint((geom%recr(i)%y - oy)/dy) + 1
                 irz = nint((geom%recr(i)%z - oz)/dz) + 1
-                lambda(irx, iry, irz) = tresidual(i, 1)
+                lambda(irx, iry, irz) = lambda(irx, iry, irz) + tresidual(i, 1)
                 recrflag(irx, iry, irz) = .true.
             end if
         end do
-        !$omp end parallel do
+        where (.not.recrflag)
+            lambda = huge_value
+        end where
+
+        !        ! This is to set lambda = 0 on boundaries, but does not make a difference
+        !        ! when both source and receivers are inside and could be ignored.
+        !        ! But when this is set, the preconditioner input residual must be negative to
+        !        ! avoid unwanted boundary artifacts.
+        !        !$omp parallel do private(i, j, k)
+        !        do k = 1, nz
+        !            do j = 1, ny
+        !                do i = 1, nx
+        !                    if ((i == 1 .or. i == nx .or. j == 1 .or. j == ny &
+            !                        .or. k == 1 .or. k == nz) .and. (.not.recrflag(i, j, k))) then
+        !                        lambda(i, j, k) = 0.0
+        !                    end if
+        !                end do
+        !            end do
+        !        end do
+        !        !$omp end parallel do
 
         ! Fast sweep to solve the adjoint-state equation
         iter = 0
@@ -1512,9 +1333,218 @@ contains
 
         tadj = permute(lambda, 321)
 
-        call warn(date_time_compact()//' Fast sweeping eikonal niter = '//num2str(iter)// &
+        call warn(date_time_compact()//' Fast sweeping adjoint niter = '//num2str(iter)// &
             ', relative diff = '//num2str(lambda_diff, '(es)'))
 
     end subroutine adjoint_iso
+
+    !
+    ! Check if a point is inside of the model domain
+    !
+    function point_in_domain(p, n, o, d, v) result(f)
+
+        real, dimension(:) :: p, o, d
+        integer, dimension(:) :: n
+        real, dimension(:, :, :) :: v
+        logical :: f
+
+        real :: p1, p2, p3
+        integer :: n1, n2, n3
+        real :: d1, d2, d3, o1, o2, o3
+        integer, dimension(1:2) :: ii, jj, kk
+        integer :: i, j, k
+
+        f = .true.
+
+        n1 = n(1)
+        n2 = n(2)
+        n3 = n(3)
+        d1 = d(1)
+        d2 = d(2)
+        d3 = d(3)
+        o1 = o(1)
+        o2 = o(2)
+        o3 = o(3)
+        p1 = p(1) - o1
+        p2 = p(2) - o2
+        p3 = p(3) - o3
+
+        if (p1 < 0 .or. p1 > (n1 - 1)*d1 &
+                .or. p2 < 0 .or. p2 > (n2 - 1)*d2 &
+                .or. p3 < 0 .or. p3 > (n3 - 1)*d3) then
+            f = .false.
+            return
+        end if
+
+        ii = [floor(p1/d1) + 1, ceiling(p1/d1) + 1]
+        jj = [floor(p2/d2) + 1, ceiling(p2/d2) + 1]
+        kk = [floor(p3/d3) + 1, ceiling(p3/d3) + 1]
+        do i = 1, 2
+            do j = 1, 2
+                do k = 1, 2
+                    if (v(ii(i), jj(j), kk(k)) == 0) then
+                        f = .false.
+                        return
+                    end if
+                end do
+            end do
+        end do
+
+    end function point_in_domain
+
+    !
+    ! Linear interpolation to get the value of a point inside a grid
+    !
+    function get_point_value_inside(p, n, o, d, v) result(f)
+
+        real, dimension(:) :: p, o, d
+        integer, dimension(:) :: n
+        real, dimension(:, :, :) :: v
+        real :: f
+
+        real :: p1, p2, p3
+        integer :: n1, n2, n3
+        real :: d1, d2, d3, o1, o2, o3
+        integer :: i1beg, i1end
+        integer :: i2beg, i2end
+        integer :: i3beg, i3end
+
+        f = .true.
+
+        n1 = n(1)
+        n2 = n(2)
+        n3 = n(3)
+        d1 = d(1)
+        d2 = d(2)
+        d3 = d(3)
+        o1 = o(1)
+        o2 = o(2)
+        o3 = o(3)
+        p1 = p(1) - o1
+        p2 = p(2) - o2
+        p3 = p(3) - o3
+
+        i1beg = floor(p1/d1) + 1
+        i1end = ceiling(p1/d1) + 1
+        i2beg = floor(p2/d2) + 1
+        i2end = ceiling(p2/d2) + 1
+        i3beg = floor(p3/d3) + 1
+        i3end = ceiling(p3/d3) + 1
+
+        if (i1beg == i1end .and. i2beg == i2end .and. i3beg == i3end) then
+
+            f = v(i1beg, i2beg, i3beg)
+
+        else if (i1beg == i1end .and. i2beg == i2end .and. i3beg /= i3end) then
+
+            f = point_interp_linear( &
+                ([i3beg, i3end] - 1)*d3, &
+                v(i1beg, i2beg, i3beg:i3end), &
+                p3)
+
+        else if (i1beg == i1end .and. i2beg /= i2end .and. i3beg == i3end) then
+
+            f = point_interp_linear( &
+                ([i2beg, i2end] - 1)*d2, &
+                v(i1beg, i2beg:i2end, i3beg), &
+                p2)
+
+        else if (i1beg /= i1end .and. i2beg == i2end .and. i3beg == i3end) then
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                v(i1beg:i1end, i2beg, i3beg), &
+                p1)
+
+        else if (i1beg == i1end .and. i2beg /= i2end .and. i3beg /= i3end) then
+
+            f = point_interp_linear( &
+                ([i2beg, i2end] - 1)*d2, &
+                ([i3beg, i3end] - 1)*d3, &
+                v(i1beg, i2beg:i2end, i3beg:i3end), &
+                p2, p3)
+
+        else if (i1beg /= i1end .and. i2beg == i2end .and. i3beg /= i3end) then
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                ([i3beg, i3end] - 1)*d3, &
+                v(i1beg:i1end, i2beg, i3beg:i3end), &
+                p1, p3)
+
+        else if (i1beg /= i1end .and. i2beg /= i2end .and. i3beg == i3end) then
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                ([i2beg, i2end] - 1)*d2, &
+                v(i1beg:i1end, i2beg:i2end, i3beg), &
+                p1, p2)
+
+        else
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                ([i2beg, i2end] - 1)*d2, &
+                ([i3beg, i3end] - 1)*d3, &
+                v(i1beg:i1end, i2beg:i2end, i3beg:i3end), &
+                p1, p2, p3)
+
+        end if
+
+    end function get_point_value_inside
+
+    !
+    ! Check if two points are in the same grid
+    !
+    function within_the_same_grid(pa, pb, o, d) result(f)
+
+        real, dimension(:) :: pa, pb, o, d
+        logical :: f
+
+        real :: p1_a, p2_a, p3_a
+        real :: p1_b, p2_b, p3_b
+        real :: d1, d2, d3, o1, o2, o3
+        integer :: i1beg_a, i1end_a
+        integer :: i2beg_a, i2end_a
+        integer :: i3beg_a, i3end_a
+        integer :: i1beg_b, i1end_b
+        integer :: i2beg_b, i2end_b
+        integer :: i3beg_b, i3end_b
+
+        d1 = d(1)
+        d2 = d(2)
+        d3 = d(3)
+        o1 = o(1)
+        o2 = o(2)
+        o3 = o(3)
+        p1_a = pa(1) - o1
+        p2_a = pa(2) - o2
+        p3_a = pa(3) - o3
+        p1_b = pb(1) - o1
+        p2_b = pb(2) - o2
+        p3_b = pb(3) - o3
+
+        i1beg_a = floor(p1_a/d1) + 1
+        i1end_a = ceiling(p1_a/d1) + 1
+        i2beg_a = floor(p2_a/d2) + 1
+        i2end_a = ceiling(p2_a/d2) + 1
+        i3beg_a = floor(p3_a/d3) + 1
+        i3end_a = ceiling(p3_a/d3) + 1
+
+        i1beg_b = floor(p1_b/d1) + 1
+        i1end_b = ceiling(p1_b/d1) + 1
+        i2beg_b = floor(p2_b/d2) + 1
+        i2end_b = ceiling(p2_b/d2) + 1
+        i3beg_b = floor(p3_b/d3) + 1
+        i3end_b = ceiling(p3_b/d3) + 1
+
+        f = i1beg_a == i1beg_b &
+            .and. i1end_a == i1end_b &
+            .and. i2beg_a == i2beg_b &
+            .and. i2end_a == i2end_b &
+            .and. i3beg_a == i3beg_b &
+            .and. i3end_a == i3end_b
+
+    end function within_the_same_grid
 
 end module traveltime_iso

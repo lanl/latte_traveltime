@@ -123,23 +123,16 @@ program main
 #ifdef dim2
                 if (allocated(refl)) then
 
-                    call forward_iso_fast_sweep_reflection( &
+                    call forward_iso_reflection( &
                         vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                         [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), &
                         refl(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), ttp_all, ttprecr)
 
                 else
 
-                    select case (forward_eikonal_method)
-                        case('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
-                                [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
-                        case('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
-                                [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
+                        [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
 
                 end if
 
@@ -147,23 +140,16 @@ program main
 #ifdef dim3
                 if (allocated(refl)) then
 
-                    call forward_iso_fast_sweep_reflection( &
+                    call forward_iso_reflection( &
                         vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                         [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), &
                         refl(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), ttp_all, ttprecr)
 
                 else
 
-                    select case (forward_eikonal_method)
-                        case('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
-                        case('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
 
                 end if
 #endif
@@ -186,14 +172,14 @@ program main
 
                     select case (incident_wave)
                         case ('p')
-                            call forward_iso_fast_sweep_reflection_elastic( &
+                            call forward_iso_reflection_elastic( &
                                 vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), &
                                 refl(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 ttp_all, tts_all, ttprecr, ttsrecr)
                         case ('s')
-                            call forward_iso_fast_sweep_reflection_elastic( &
+                            call forward_iso_reflection_elastic( &
                                 vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), &
@@ -203,22 +189,12 @@ program main
 
                 else
 
-                    select case (forward_eikonal_method)
-                        case('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
-                                [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
-                            call forward_iso_fast_march( &
-                                vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
-                                [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), tts, ttsrecr)
-                        case('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
-                                [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
-                            call forward_iso_fast_sweep( &
-                                vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
-                                [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), tts, ttsrecr)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
+                        [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
+                    call forward_iso( &
+                        vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
+                        [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), tts, ttsrecr)
 
                 end if
 
@@ -228,14 +204,14 @@ program main
 
                     select case (incident_wave)
                         case ('p')
-                            call forward_iso_fast_sweep_reflection_elastic( &
+                            call forward_iso_reflection_elastic( &
                                 vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                 vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                 [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), &
                                 refl(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                 ttp_all, tts_all, ttprecr, ttsrecr)
                         case ('s')
-                            call forward_iso_fast_sweep_reflection_elastic( &
+                            call forward_iso_reflection_elastic( &
                                 vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                 vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                 [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), &
@@ -245,22 +221,12 @@ program main
 
                 else
 
-                    select case (forward_eikonal_method)
-                        case('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
-                            call forward_iso_fast_march( &
-                                vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, ttsrecr)
-                        case('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
-                            call forward_iso_fast_sweep( &
-                                vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, ttsrecr)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttprecr)
+                    call forward_iso( &
+                        vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, ttsrecr)
 
                 end if
 #endif

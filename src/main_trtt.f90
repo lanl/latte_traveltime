@@ -119,7 +119,7 @@ program main
         ! Compute inversion step size
         call compute_step_size
 
-        ! Update ADMM variables if necessary
+        ! Compute regularization
         call compute_regularization
 
         ! Print misfit information

@@ -102,3 +102,39 @@ def num2str(x, f=''):
         ff = "{:" + f + "}"
     
     return ff.format(x)
+    
+
+## Get numpy array and transfer to CPU
+def get_numpy(w):
+
+    return w.squeeze().data.cpu().numpy()
+
+
+## Find indices
+def find_indices(list_to_check, item_to_find):
+
+    indices = []
+    for idx, value in enumerate(list_to_check):
+        if value == item_to_find:
+            indices.append(idx)
+
+    return indices
+
+
+## Set font for maplotlib plotting
+import matplotlib as mplt
+from matplotlib import rcParams
+
+
+def set_font():
+
+    basefamily = 'sans-serif'
+    basefont = 'Arial'
+    fontset = 'custom'
+    rcParams['font.family'] = basefamily
+    rcParams['font.' + basefamily] = basefont
+    mplt.rcParams['mathtext.fontset'] = fontset
+    mplt.rcParams['mathtext.rm'] = basefont
+    mplt.rcParams['mathtext.sf'] = basefont
+    mplt.rcParams['mathtext.it'] = basefont + ':italic'
+    mplt.rcParams['mathtext.bf'] = basefont + ':bold'

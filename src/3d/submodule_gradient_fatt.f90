@@ -84,36 +84,19 @@ contains
             select case (which_medium)
 
                 case ('acoustic-iso')
-                    select case (forward_eikonal_method)
-                        case ('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                        case ('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
                     call output_array(ttp_syn, tidy(dir_synthetic)// &
                         '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin')
 
                 case ('elastic-iso')
-                    select case (forward_eikonal_method)
-                        case ('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                            call forward_iso_fast_march( &
-                                vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
-                        case ('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                            call forward_iso_fast_sweep( &
-                                vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
+                    call forward_iso( &
+                        vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
                     call output_array(ttp_syn, tidy(dir_synthetic)// &
                         '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin')
                     call output_array(tts_syn, tidy(dir_synthetic)// &
@@ -183,7 +166,8 @@ contains
                         call adjoint_iso( &
                             vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                             [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, &
-                            ones_like(ttp_residual), energy)
+                            -ones_like(ttp_residual), energy)
+                        energy = -energy
 
                         lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 
@@ -216,7 +200,8 @@ contains
                         call adjoint_iso( &
                             vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                             [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, &
-                            ones_like(ttp_residual), energy)
+                            -ones_like(ttp_residual), energy)
+                        energy = -energy
 
                         lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 
@@ -248,7 +233,8 @@ contains
                         call adjoint_iso( &
                             vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                             [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, &
-                            ones_like(tts_residual), energy)
+                            -ones_like(tts_residual), energy)
+                        energy = -energy
 
                         lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 

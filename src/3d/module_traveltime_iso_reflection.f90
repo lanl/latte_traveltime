@@ -25,11 +25,11 @@ module traveltime_iso_reflection
 
     implicit none
 
-    public :: forward_iso_fast_sweep_reflection
+    public :: forward_iso_reflection
     public :: adjoint_iso_reflection
     public :: image_iso
 
-    public :: forward_iso_fast_sweep_reflection_elastic
+    public :: forward_iso_reflection_elastic
     public :: adjoint_iso_reflection_elastic
     public :: image_iso_elastic
 
@@ -42,7 +42,7 @@ contains
     !
     !> Fast sweeping factorized eikonal solver in 3D isotropic acoustic media
     !
-    subroutine forward_iso_fast_sweep_reflection(v, d, o, geom, refl, tall, trec)
+    subroutine forward_iso_reflection(v, d, o, geom, refl, tall, trec)
 
         real, dimension(:, :, :), intent(in) :: v
         real, dimension(1:3), intent(in) :: d, o
@@ -67,7 +67,7 @@ contains
 
         ! Compute transmission traveltime
         sg = geom
-        call forward_iso_fast_sweep(v, d, o, sg, tt0, ttrec)
+        call forward_iso(v, d, o, sg, tt0, ttrec)
         trec(:, 1) = ttrec(:, 1)
         tall(:, :, :, 1) = tt0(:, :, :)
         call warn(date_time_compact()//' Source '//num2str(geom%id) &
@@ -96,7 +96,7 @@ contains
                 end do
             end do
 
-            call forward_iso_fast_sweep(v, d, o, sg, tt, ttrec)
+            call forward_iso(v, d, o, sg, tt, ttrec)
             trec(:, l + 1) = ttrec(:, 1)
             tall(:, :, :, l + 1) = tt(:, :, :)
 
@@ -105,7 +105,7 @@ contains
 
         end do
 
-    end subroutine forward_iso_fast_sweep_reflection
+    end subroutine forward_iso_reflection
 
     !
     !> @brife Compute adjoint field for TRTT in 3D isotropic acoustic media
@@ -203,7 +203,7 @@ contains
 
         ! Compute transmission traveltime
         sg = geom
-        call forward_iso_fast_sweep(v, d, o, sg, ttf, ttrec)
+        call forward_iso(v, d, o, sg, ttf, ttrec)
 
         n1 = size(v, 1)
         n2 = size(v, 2)
@@ -226,7 +226,7 @@ contains
                 sg%srcr(i)%z = sg%recr(i)%z
                 sg%srcr(i)%t0 = tmax - tobs(i, l)
             end do
-            call forward_iso_fast_sweep(v, d, o, sg, ttr, ttrec)
+            call forward_iso(v, d, o, sg, ttr, ttrec)
             ! ... and then get it back
             ttr = tmax - ttr
             ! Get image by finding thresholded match
@@ -249,7 +249,7 @@ contains
     !
     !> Fast sweeping factorized eikonal solver in 3D isotropic elastic media
     !
-    subroutine forward_iso_fast_sweep_reflection_elastic(vp, vs, d, o, geom, refl, tpall, tsall, tprec, tsrec)
+    subroutine forward_iso_reflection_elastic(vp, vs, d, o, geom, refl, tpall, tsall, tprec, tsrec)
 
         real, dimension(:, :, :), intent(in) :: vp, vs
         real, dimension(1:3), intent(in) :: d, o
@@ -274,11 +274,11 @@ contains
 
         ! Compute transmission traveltime
         sg = geom
-        call forward_iso_fast_sweep(vp, d, o, sg, ttp0, ttprec)
+        call forward_iso(vp, d, o, sg, ttp0, ttprec)
         tprec(:, 1) = ttprec(:, 1)
         tpall(:, :, :, 1) = ttp0(:, :, :)
         !        ! Based on the definition of TRTT, there should be no direct S (incident-P case) or direct P (incident-S case)
-        !        call forward_iso_fast_sweep(vs, d, o, sg, tts0, ttsrec)
+        !        call forward_iso(vs, d, o, sg, tts0, ttsrec)
         !        tsrec(:, 1) = ttsrec(:, 1)
         !        tsall(:, :, :, 1) = tts0(:, :, :)
         call warn(date_time_compact()//' Source '//num2str(geom%id) &
@@ -309,11 +309,11 @@ contains
             end do
 
             ! p, reflector time = tp, velocity = vp
-            call forward_iso_fast_sweep(vp, d, o, sg, ttp, ttprec)
+            call forward_iso(vp, d, o, sg, ttp, ttprec)
             tprec(:, l + 1) = ttprec(:, 1)
             tpall(:, :, :, l + 1) = ttp(:, :, :)
             ! s, reflector time = tp, velocity = vs
-            call forward_iso_fast_sweep(vs, d, o, sg, tts, ttsrec)
+            call forward_iso(vs, d, o, sg, tts, ttsrec)
             tsrec(:, l + 1) = ttsrec(:, 1)
             tsall(:, :, :, l + 1) = tts(:, :, :)
 
@@ -322,7 +322,7 @@ contains
 
         end do
 
-    end subroutine forward_iso_fast_sweep_reflection_elastic
+    end subroutine forward_iso_reflection_elastic
 
     !
     !> @brife Compute adjoint field for TRTT in 3D isotropic elastic media
@@ -461,7 +461,7 @@ contains
 
         ! Compute transmission traveltime
         sg = geom
-        call forward_iso_fast_sweep(vp, d, o, sg, ttf, ttrec)
+        call forward_iso(vp, d, o, sg, ttf, ttrec)
 
         n1 = size(vp, 1)
         n2 = size(vp, 2)
@@ -484,7 +484,7 @@ contains
                 sg%srcr(i)%z = sg%recr(i)%z
                 sg%srcr(i)%t0 = tmax - tpobs(i, l)
             end do
-            call forward_iso_fast_sweep(vp, d, o, sg, ttr, ttrec)
+            call forward_iso(vp, d, o, sg, ttr, ttrec)
             ! ... and then get it back
             ttr = tmax - ttr
             ! Get image by finding thresholded match
@@ -500,7 +500,7 @@ contains
                 sg%srcr(i)%z = sg%recr(i)%z
                 sg%srcr(i)%t0 = tmax - tsobs(i, l)
             end do
-            call forward_iso_fast_sweep(vs, d, o, sg, ttr, ttrec)
+            call forward_iso(vs, d, o, sg, ttr, ttrec)
             ! ... and then get it back
             ttr = tmax - ttr
             ! Get image by finding thresholded match

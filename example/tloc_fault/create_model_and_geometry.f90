@@ -2,7 +2,7 @@
 program test
 
     use libflit
-    use geological_model_3d
+    use librgm
 
     real, allocatable, dimension(:, :, :) :: w
     real, allocatable, dimension(:, :, :) :: vp, vs, r
@@ -36,7 +36,7 @@ program test
     p%refl_shape = 'gaussian'
     p%refl_sigma2 = [200.0, 400.0]
     p%refl_sigma3 = [200.0, 400.0]
-    p%secondary_refl_amp = 0.0
+    p%secondary_refl_height_ratio = 0.0
     p%refl_smooth = 10.0
     p%yn_rgt = .true.
     p%fwidth = 2

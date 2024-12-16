@@ -41,8 +41,8 @@ st0 = read_array('./model/st0.bin', nr)
 
 for i in regspace(1, ns, 1):
     data = np.append(data, read_array('./test_loc_dd_acoustic/record_processed/shot_' + num2str(i) + '_traveltime_p.bin', nr) - st0)
-    data_ad = np.append(data_ad, read_array('./test_loc_dd_acoustic/iteration_100/synthetic/shot_' + num2str(i) + '_traveltime_p.bin', nr))
-    data_dd = np.append(data_dd, read_array('./test_loc_dd_acoustic_reg/iteration_100/synthetic/shot_' + num2str(i) + '_traveltime_p.bin', nr))
+    data_ad = np.append(data_ad, read_array('./test_loc_dd_acoustic/iteration_50/synthetic/shot_' + num2str(i) + '_traveltime_p.bin', nr))
+    data_dd = np.append(data_dd, read_array('./test_loc_dd_acoustic_reg/iteration_50/synthetic/shot_' + num2str(i) + '_traveltime_p.bin', nr))
     
 data_ad = data_ad - data
 data_dd = data_dd - data

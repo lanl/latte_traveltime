@@ -1,5 +1,5 @@
 #
-# © 2024. Triad National Security, LLC. All rights reserved.
+# (c) 2024. Triad National Security, LLC. All rights reserved.
 #
 # This program was produced under U.S. Government contract 89233218CNA000001 
 # for Los Alamos National Laboratory (LANL), which is operated by 
@@ -329,7 +329,7 @@ if __name__ == '__main__':
         valid_loader = DataLoader(v, batch_size=opts.batch_valid, num_workers=opts.threads)
 
         net = mtlnet()
-        net.load_state_dict(torch.load(opts.check, map_location=device)['state_dict'])
+        net.load_state_dict(torch.load(opts.check, map_location=device, weights_only=True)['state_dict'])
         net.to(device)
 
         l = 1
@@ -376,7 +376,7 @@ if __name__ == '__main__':
 
         # Load trained model
         net = mtlnet()
-        net.load_state_dict(torch.load(opts.model, map_location=device)['state_dict'])
+        net.load_state_dict(torch.load(opts.model, map_location=device, weights_only=True)['state_dict'])
         net.to(device)
 
         print(date_time(), " >> Pretrained model loaded")

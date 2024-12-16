@@ -27,7 +27,7 @@ program test
 
     ! For plotting, output clean data
     call make_directory('./data_no_st0')
-    st0 = random(ns, range=[0.0, 10.0], seed=789)
+    st0 = load('./model/st0.bin', ns)
     do i = 1, ns
         v = load('./data/shot_'//num2str(i)//'_traveltime_p.bin', nrx + nrz) - st0(i)
         w = load('./data_noisy/shot_'//num2str(i)//'_traveltime_p.bin', nrx + nrz) - st0(i)

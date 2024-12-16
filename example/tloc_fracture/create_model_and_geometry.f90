@@ -2,7 +2,7 @@
 program test
 
     use libflit
-    use geological_model_2d
+    use librgm
 
     real, allocatable, dimension(:, :) :: vp, r
     integer :: n1, n2, ns, i, j
@@ -29,7 +29,7 @@ program test
     p%lwv = 0.1
     p%dip = [rand(range=[100.0, 120.0], seed=123), rand(range=[60.0, 80.0], seed=567)]
     p%disp = [10.0, -10.0]
-    p%secondary_refl_amp = 0.1
+    p%secondary_refl_height_ratio = 0.1
     p%refl_smooth = 10.0
     p%yn_facies = .true.
     p%yn_rgt = .true.

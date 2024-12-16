@@ -138,36 +138,19 @@ contains
             select case (which_medium)
 
                 case ('acoustic-iso')
-                    select case (forward_eikonal_method)
-                        case ('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                        case ('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
                     call output_array(ttp_syn, tidy(dir_synthetic)// &
                         '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin')
 
                 case ('elastic-iso')
-                    select case (forward_eikonal_method)
-                        case ('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                            call forward_iso_fast_march( &
-                                vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
-                        case ('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                            call forward_iso_fast_sweep( &
-                                vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
+                    call forward_iso( &
+                        vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
                     call output_array(ttp_syn, tidy(dir_synthetic)// &
                         '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin')
                     call output_array(tts_syn, tidy(dir_synthetic)// &
@@ -242,7 +225,8 @@ contains
                                 call adjoint_iso( &
                                     vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                     [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, &
-                                    ones_like(ttp_residual), energy)
+                                    -ones_like(ttp_residual), energy)
+                                energy = -energy
 
                                 lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 
@@ -262,42 +246,50 @@ contains
                         else if (model_name(i) == 'sx') then
                             ! grad_sx = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂x, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dxt = (ttp(irz, iry, clip(irx + 1, 1, shot_nx)) - ttp(irz, iry, clip(irx - 1, 1, shot_nx)))/(2*dx)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dxt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dxt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'sy') then
                             ! grad_sy = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂y, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dyt = (ttp(irz, clip(iry + 1, 1, shot_ny), irx) - ttp(irz, clip(iry - 1, 1, shot_ny), irx))/(2*dy)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dyt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dyt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'sz') then
                             ! grad_sz = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂z, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dzt = (ttp(clip(irz + 1, 1, shot_nz), iry, irx) - ttp(clip(irz - 1, 1, shot_nz), iry, irx))/(2*dz)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dzt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dzt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'st0') then
                             ! grad_st0 = (t_syn - (t_obs - t_0))*δ(x - x_vr)
 
+                            !$omp parallel do private(j)
                             do j = 1, gmtr(ishot)%nr
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)
                             end do
+                            !$omp end parallel do
 
                         end if
 
@@ -326,7 +318,8 @@ contains
                                 call adjoint_iso( &
                                     vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                     [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, &
-                                    ones_like(ttp_residual), energy)
+                                    -ones_like(ttp_residual), energy)
+                                energy = -energy
 
                                 lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 
@@ -357,7 +350,8 @@ contains
                                 call adjoint_iso( &
                                     vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                     [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, &
-                                    ones_like(tts_residual), energy)
+                                    -ones_like(tts_residual), energy)
+                                energy = -energy
 
                                 lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 
@@ -377,49 +371,57 @@ contains
                         else if (model_name(i) == 'sx') then
                             ! grad_sx = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂x, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dxt = (ttp(irz, iry, clip(irx + 1, 1, shot_nx)) - ttp(irz, iry, clip(irx - 1, 1, shot_nx)))/(2*dx)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dxt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dxt
                                 dxt = (tts(irz, iry, clip(irx + 1, 1, shot_nx)) - tts(irz, iry, clip(irx - 1, 1, shot_nx)))/(2*dx)
                                 model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + tts_residual(j, 1)*dxt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'sy') then
                             ! grad_sy = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂y, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dyt = (ttp(irz, clip(iry + 1, 1, shot_ny), irx) - ttp(irz, clip(iry - 1, 1, shot_ny), irx))/(2*dy)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dyt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dyt
                                 dyt = (tts(irz, clip(iry + 1, 1, shot_ny), irx) - tts(irz, clip(iry - 1, 1, shot_ny), irx))/(2*dy)
                                 model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + tts_residual(j, 1)*dyt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'sz') then
                             ! grad_sz = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂z, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dzt = (ttp(clip(irz + 1, 1, shot_nz), iry, irx) - ttp(clip(irz - 1, 1, shot_nz), iry, irx))/(2*dz)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dzt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dzt
                                 dzt = (tts(clip(irz + 1, 1, shot_nz), iry, irx) - tts(clip(irz - 1, 1, shot_nz), iry, irx))/(2*dz)
                                 model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + tts_residual(j, 1)*dzt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'st0') then
                             ! grad_st0 = (t_syn - (t_obs - t_0))*δ(x - x_vr)
 
+                            !$omp parallel do private(j)
                             do j = 1, gmtr(ishot)%nr
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1) &
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1) &
                                     + tts_residual(j, 1)
                             end do
+                            !$omp end parallel do
 
                         end if
 
@@ -583,16 +585,13 @@ contains
             select case (which_medium)
 
                 case ('acoustic-iso')
-                    select case (forward_eikonal_method)
-                        case ('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                        case ('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
+                    ! Here, the synthetic traveltime field must be saved and then read later, by the adjoint solver
+                    call output_array(ttp, tidy(dir_scratch)// &
+                        '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin')
+                    ! And note that the synthetic data at receivers cannot be saved at the same directory
                     call output_array(ttp_syn, tidy(dir_synthetic)// &
                         '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin')
 
@@ -600,22 +599,18 @@ contains
                     tpobs_all(:, ishot) = load(tidy(dir_field)//'/shot_'//num2str(ishot)//'_traveltime_p.bin', nr_virtual)
 
                 case ('elastic-iso')
-                    select case (forward_eikonal_method)
-                        case ('fast_march')
-                            call forward_iso_fast_march( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                            call forward_iso_fast_march( &
-                                vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
-                        case ('fast_sweep')
-                            call forward_iso_fast_sweep( &
-                                vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
-                            call forward_iso_fast_sweep( &
-                                vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
-                                [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
-                    end select
+                    call forward_iso( &
+                        vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, ttp_syn)
+                    call forward_iso( &
+                        vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
+                        [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, tts_syn)
+                    ! Here, the synthetic traveltime field must be saved and then read later, by the adjoint solver
+                    call output_array(ttp, tidy(dir_scratch)// &
+                        '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin')
+                    call output_array(tts, tidy(dir_scratch)// &
+                        '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_s.bin')
+                    ! And note that the synthetic data at receivers cannot be saved at the same directory
                     call output_array(ttp_syn, tidy(dir_synthetic)// &
                         '/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin')
                     call output_array(tts_syn, tidy(dir_synthetic)// &
@@ -723,6 +718,8 @@ contains
 
                 case ('acoustic-iso')
 
+                    ttp = load(tidy(dir_scratch)//'/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin', nz, ny, nx)
+
                     do i = 1, nmodel
 
                         ! Update model parameters, if necessary
@@ -740,7 +737,8 @@ contains
                                 call adjoint_iso( &
                                     vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                     [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, &
-                                    ones_like(ttp_residual), energy)
+                                    -ones_like(ttp_residual), energy)
+                                energy = -energy
 
                                 lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 
@@ -760,42 +758,50 @@ contains
                         else if (model_name(i) == 'sx') then
                             ! grad_sx = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂x, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dxt = (ttp(irz, iry, clip(irx + 1, 1, shot_nx)) - ttp(irz, iry, clip(irx - 1, 1, shot_nx)))/(2*dx)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dxt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dxt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'sy') then
                             ! grad_sy = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂y, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dyt = (ttp(irz, clip(iry + 1, 1, shot_ny), irx) - ttp(irz, clip(iry - 1, 1, shot_ny), irx))/(2*dy)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dyt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dyt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'sz') then
                             ! grad_sz = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂z, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dzt = (ttp(clip(irz + 1, 1, shot_nz), iry, irx) - ttp(clip(irz - 1, 1, shot_nz), iry, irx))/(2*dz)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dzt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dzt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'st0') then
                             ! grad_st0 = (t_syn - (t_obs - t_0))*δ(x - x_vr)
 
+                            !$omp parallel do private(j)
                             do j = 1, gmtr(ishot)%nr
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)
                             end do
+                            !$omp end parallel do
 
                         end if
 
@@ -805,6 +811,9 @@ contains
                         //' gradient computation is done. ')
 
                 case ('elastic-iso')
+
+                    ttp = load(tidy(dir_scratch)//'/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_p.bin', nz, ny, nx)
+                    tts = load(tidy(dir_scratch)//'/shot_'//num2str(gmtr(ishot)%id)//'_traveltime_s.bin', nz, ny, nx)
 
                     do i = 1, nmodel
 
@@ -824,7 +833,8 @@ contains
                                 call adjoint_iso( &
                                     vp(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                     [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), ttp, &
-                                    ones_like(ttp_residual), energy)
+                                    -ones_like(ttp_residual), energy)
+                                energy = -energy
 
                                 lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 
@@ -855,7 +865,8 @@ contains
                                 call adjoint_iso( &
                                     vs(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend), &
                                     [dx, dy, dz], [shot_xbeg, shot_ybeg, shot_zbeg], gmtr(ishot), tts, &
-                                    ones_like(tts_residual), energy)
+                                    -ones_like(tts_residual), energy)
+                                energy = -energy
 
                                 lam = -lam/(energy + precond_eps*maxval(abs(energy)))
 
@@ -875,48 +886,56 @@ contains
                         else if (model_name(i) == 'sx') then
                             ! grad_sx = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂x, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dxt = (ttp(irz, iry, clip(irx + 1, 1, shot_nx)) - ttp(irz, iry, clip(irx - 1, 1, shot_nx)))/(2*dx)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dxt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dxt
                                 dxt = (tts(irz, iry, clip(irx + 1, 1, shot_nx)) - tts(irz, iry, clip(irx - 1, 1, shot_nx)))/(2*dx)
                                 model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + tts_residual(j, 1)*dxt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'sy') then
                             ! grad_sy = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂y, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dyt = (ttp(irz, clip(iry + 1, 1, shot_ny), irx) - ttp(irz, clip(iry - 1, 1, shot_ny), irx))/(2*dy)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dyt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dyt
                                 dyt = (tts(irz, clip(iry + 1, 1, shot_ny), irx) - tts(irz, clip(iry - 1, 1, shot_ny), irx))/(2*dy)
                                 model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + tts_residual(j, 1)*dyt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'sz') then
                             ! grad_sz = (t_syn - (t_obs - t_0))*δ(x - x_vr)*∂T_syn/∂z, is a scalar value at each virtual receiver
 
+                            !$omp parallel do private(j, irx, iry, irz, dxt, dyt, dzt)
                             do j = 1, gmtr(ishot)%nr
                                 irx = nint((sx(j, 1, 1) - shot_xbeg)/dx) + 1
                                 iry = nint((sy(j, 1, 1) - shot_ybeg)/dy) + 1
                                 irz = nint((sz(j, 1, 1) - shot_zbeg)/dz) + 1
                                 dzt = (ttp(clip(irz + 1, 1, shot_nz), iry, irx) - ttp(clip(irz - 1, 1, shot_nz), iry, irx))/(2*dz)
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1)*dzt
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1)*dzt
                                 dzt = (tts(clip(irz + 1, 1, shot_nz), iry, irx) - tts(clip(irz - 1, 1, shot_nz), iry, irx))/(2*dz)
                                 model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + tts_residual(j, 1)*dzt
                             end do
+                            !$omp end parallel do
 
                         else if (model_name(i) == 'st0') then
                             ! grad_st0 = (t_syn - (t_obs - t_0))*δ(x - x_vr)
 
+                            !$omp parallel do private(j)
                             do j = 1, gmtr(ishot)%nr
-                                model_grad(i)%array(j, 1, 1) = ttp_residual(j, 1) + tts_residual(j, 1)
+                                model_grad(i)%array(j, 1, 1) = model_grad(i)%array(j, 1, 1) + ttp_residual(j, 1) + tts_residual(j, 1)
                             end do
+                            !$omp end parallel do
 
                         end if
 

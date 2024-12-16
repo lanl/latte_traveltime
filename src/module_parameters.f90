@@ -341,7 +341,7 @@ contains
         call readpar_float(file_parameter, 'rymax', rymax, +float_huge)
         call readpar_float(file_parameter, 'rzmin', rzmin, -float_huge)
         call readpar_float(file_parameter, 'rzmax', rzmax, +float_huge)
-        call readpar_logical(file_parameter, 'yn_exchange_sr', yn_exchange_sr, ifthen(which_program == 'tloc', .true., .false.))
+        call readpar_logical(file_parameter, 'yn_exchange_sr', yn_exchange_sr, ifelse(which_program == 'tloc', .true., .false.))
 
         call readpar_string(file_parameter, 'dir_working', dir_working, './test')
         call readpar_string(file_parameter, 'dir_record', dir_record, './data')
@@ -704,6 +704,7 @@ contains
         end do
 
         gmtr = g(1:l - 1)
+        deallocate(g)
 
         ! The following pack(gmtr) works with ifort, but not new ifx...
         ! To avoid potential segmentation fault, use the above hard way to pack

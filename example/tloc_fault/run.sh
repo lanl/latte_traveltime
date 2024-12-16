@@ -13,7 +13,10 @@ mpirun -np 40 $bindir/x_eikonal3 param_eikonal.rb
 ./exec2
 
 # tloc without regularization
-mpirun -np 40 $bindir/x_tloc3 param_tloc.rb
+mpirun -np 40 $bindir/x_tloc3 param.rb
+
+# tloc with smoothness regularization
+mpirun -np 40 $bindir/x_tloc3 param_smooth.rb
 
 # tloc with regularization
-mpirun -np 40 $bindir/x_tloc3 param_tloc_reg.rb
+mpirun -np 40 $bindir/x_tloc3 param_reg.rb

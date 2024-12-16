@@ -26,11 +26,11 @@ file_sz = model/sz_init.bin
 reg_scale_sx = 0:0, 15:0, 25:0.5, 40:0.8
 reg_scale_sz = 0:0, 15:0, 25:0.5, 40:0.8
 source_regularization_method = ml
-reg_ml_src_infer = $HOME/src/latte/ml/main2_infer.py
+reg_ml_src = $HOME/src/latte/ml/main2.py
 reg_ml_model_infer = $HOME/src/latte/ml/infer2.model
-reg_ml_src_refine = $HOME/src/latte/ml/main2_refine.py
 reg_ml_model_refine = $HOME/src/latte/ml/refine2.model
 reg_ml_python = python
 
+niter_max = 50
 misfit_type = dd
 dir_working = test_loc_dd_acoustic_reg

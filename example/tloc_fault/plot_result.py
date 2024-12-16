@@ -1,27 +1,16 @@
 
-import matplotlib as mplt
 import matplotlib.pyplot as plt
 import numpy
-import matplotlib as mplt
-from matplotlib import rcParams
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
-from libpy_io import *
-from libpy_filedir import *
-from libpy_utility import *
+from python.libpy_io import *
+from python.libpy_filedir import *
+from python.libpy_utility import *
 import subprocess
 
 # fonts
-basefamily = 'sans-serif'
-basefont = 'Arial'
-fontset = 'custom'
-rcParams['font.family'] = basefamily
-rcParams['font.size'] = 14
-rcParams['font.' + basefamily] = basefont
-mplt.rcParams['mathtext.fontset'] = fontset
-mplt.rcParams['mathtext.rm'] = basefont
-mplt.rcParams['mathtext.sf'] = basefont
-mplt.rcParams['mathtext.it'] = basefont + ':italic'
-mplt.rcParams['mathtext.bf'] = basefont + ':bold'
+set_font()
+
+plt.rcParams.update({'font.size': 14})  # Replace 14 with your desired font size
 rcParams["xtick.top"] = True
 rcParams["xtick.labeltop"] = True
 rcParams["xtick.bottom"] = False
@@ -34,9 +23,9 @@ zrange = [-100, 1100]
 nr = 1200
 
 
-label = ['tloc', 'tloc_reg']
+label = ['tloc', 'tloc_smooth', 'tloc_reg']
 
-for itest in range(2):
+for itest in range(len(label)):
 
     iter = 50
     iters = [iter]  #[5, 10, iter]
@@ -93,9 +82,6 @@ for itest in range(2):
     print(dmin, dmax)
 
     norm = mplt.colors.Normalize(vmin=0, vmax=3600)
-    # color=mplt.cm.jet(norm(dist_init[i]))
-
-    # fig, (ax, ax, ax) = plt.subplots(1, 3, figsize=(14, 4))
 
     #=================================================================== gt
     fig, ax = plt.subplots(1, 1, figsize=(6.5, 4))
@@ -123,6 +109,7 @@ for itest in range(2):
     cb.ax.yaxis.set_minor_locator(MultipleLocator(40))
     plt.tight_layout()
     plt.savefig(output + '_gt.pdf', dpi=300, bbox_inches='tight', pad_inches=2.0 / 72.0)
+    plt.close()
 
     #=================================================================== init
     fig, ax = plt.subplots(1, 1, figsize=(6.5, 4))
@@ -146,7 +133,7 @@ for itest in range(2):
     cb.ax.yaxis.set_minor_locator(MultipleLocator(40))
     plt.tight_layout()
     plt.savefig(output + '_init.pdf', dpi=300, bbox_inches='tight', pad_inches=2.0 / 72.0)
-    
+    plt.close()
     
     
     #=================================================================== final
@@ -217,7 +204,8 @@ for itest in range(2):
         ax.legend(ncols=1, loc='lower right', fontsize=12)
         plt.tight_layout()
         plt.savefig(output + '_invt_iter_' + num2str(l) + '_yz.pdf', dpi=300, bbox_inches='tight', pad_inches=2.0 / 72.0)
-    
+        plt.close()
+        
     #=================================================================== final
     for l in iters:
 
@@ -281,6 +269,7 @@ for itest in range(2):
         cb.ax.yaxis.set_minor_locator(MultipleLocator(10))
         plt.tight_layout()
         plt.savefig(output + '_invt_iter_' + num2str(l) + '_xyz_error.pdf', dpi=300, bbox_inches='tight', pad_inches=2.0 / 72.0)
+        plt.close()
 
     #=================================================================== convergence
     if has_t0:
@@ -309,13 +298,15 @@ for itest in range(2):
         # plt.show()
         plt.tight_layout()
         plt.savefig(output + '_st0.pdf', dpi=300, bbox_inches='tight', pad_inches=2.0 / 72.0)
+        plt.close()
 
     #=================================================================== convergence
-    fig, ax = plt.subplots(1, 1, figsize=(8, 3))
+    fig, ax = plt.subplots(1, 1, figsize=(9, 3))
 
     ax.plot(regspace(0.0, nr - 1.0, 1.0), p_obs, 'b', linewidth=1, label='Ground Truth')
     ax.plot(regspace(0.0, nr - 1.0, 1.0), p_init, 'lime', linewidth=1, label='Initial Model')
     ax.plot(regspace(0.0, nr - 1.0, 1.0), p_final, 'r', linewidth=1, label='Inverted Model')
+    ax.plot(regspace(0.0, nr - 1.0, 1.0), p_final - p_obs, 'gray', linewidth=1, label='Final Misfit')
 
     ax.set_xlim([-1, nr - 1.0])
     ax.set_ylim([-1, 2.5])
@@ -327,7 +318,7 @@ for itest in range(2):
     ax.set_xlabel('Source Index')
     ax.xaxis.set_label_position('top')
     ax.set_ylabel('Traveltime (s)')
-    ax.legend(ncols=3, loc='lower left')
+    ax.legend(ncols=4, loc='lower left', fontsize=12)
     ax.invert_yaxis()
     # ax.grid(True) #, linestyle='dashed')
 
@@ -337,11 +328,12 @@ for itest in range(2):
 
     if has_s:
 
-        fig, ax = plt.subplots(1, 1, figsize=(8, 3))
+        fig, ax = plt.subplots(1, 1, figsize=(9, 3))
 
         ax.plot(regspace(0.0, nr - 1.0, 1.0), s_obs, 'b', linewidth=1, label='Ground Truth')
         ax.plot(regspace(0.0, nr - 1.0, 1.0), s_init, 'lime', linewidth=1, label='Initial Model')
         ax.plot(regspace(0.0, nr - 1.0, 1.0), s_final, 'r', linewidth=1, label='Inverted Model')
+        ax.plot(regspace(0.0, nr - 1.0, 1.0), s_final - s_obs, 'r', linewidth=1, label='Final Misfit')
 
         ax.set_xlim([0, nr - 1.0])
         ax.set_ylim([-1, 4])
@@ -353,13 +345,14 @@ for itest in range(2):
         ax.set_xlabel('Source Index')
         ax.xaxis.set_label_position('top')
         ax.set_ylabel('Traveltime (s)')
-        ax.legend(ncols=3, loc='lower left')
+        ax.legend(ncols=4, loc='lower left', fontsize=12)
         ax.invert_yaxis()
         # ax.grid(True) #, linestyle='dashed')
 
         # plt.show()
         plt.tight_layout()
         plt.savefig(output + '_time_s.pdf', dpi=300, bbox_inches='tight', pad_inches=2.0 / 72.0)
+        plt.close()
 
 
 
@@ -379,3 +372,71 @@ for itest in range(2):
     # plt.show()
     plt.tight_layout()
     plt.savefig(output + '_misfit.pdf', dpi=300, bbox_inches='tight', pad_inches=2.0 / 72.0)
+    plt.close()
+    
+    #=================================================================== convergence
+    x_final = read_array(dir + '/iteration_' + num2str(l) + '/model/updated_sx.bin', nr)
+    y_final = read_array(dir + '/iteration_' + num2str(l) + '/model/updated_sy.bin', nr)
+    z_final = read_array(dir + '/iteration_' + num2str(l) + '/model/updated_sz.bin', nr)
+    data = np.sqrt((x_final - x_obs)**2 + (y_final - y_obs)**2 + (z_final - z_obs)**2)
+    
+    # from scipy.stats import f
+    # d1, d2, loc, scale = f.fit(data)
+    # xx = np.linspace(np.min(data), np.max(data), 100)
+    # pdf = f.pdf(xx, d1, d2, scale=scale)
+
+    fig, ax = plt.subplots(1, 1, figsize=(6, 4))
+    vmin, vmax = np.amin(data), np.amax(data)
+    lim = np.amax([np.abs(vmin), vmax]) * 1.1
+    x, bins, p = ax.hist(
+        data,
+        bins=regspace(0.0, 200.0, 10.0),
+        density=True,
+        facecolor="royalblue",
+        alpha=1,
+        ec="black",
+        align="mid",
+    )
+    for item in p:
+        item.set_height(item.get_height() / sum(x))
+      
+    axx = ax.twinx()  
+    axx.hist(
+        data,
+        bins=regspace(0.0, 200.0, 10.0),
+        density=True,
+        cumulative=True,
+        histtype='step',
+        ec='r',
+        linewidth=2
+    )
+    axx.set_ylim([0, 1])
+    axx.yaxis.set_major_locator(MultipleLocator(0.2))
+    axx.yaxis.set_minor_locator(MultipleLocator(0.05))
+    axx.set_ylabel("Normalized Cumlative Count", fontsize=14, color='r')
+    axx.tick_params(axis='y', labelcolor='r')
+        
+    # ax.plot(xx, pdf*10, linestyle='--', color='r')
+    ax.set_xlabel("Location Error (m)", fontsize=14)
+    ax.set_axisbelow(True)
+    ax.set_aspect('auto')
+    ax.grid(color="gray", linestyle="dashed", linewidth=1)
+    ax.xaxis.set_major_locator(MultipleLocator(50))
+    ax.xaxis.set_minor_locator(MultipleLocator(5))
+    ax.yaxis.set_major_locator(MultipleLocator(0.1))
+    ax.yaxis.set_minor_locator(MultipleLocator(0.02))
+    ax.set_xlim([0, 200])
+    ax.set_ylim([0, 0.3])
+    ax.xaxis.set_tick_params(labelsize=14)
+    ax.yaxis.set_tick_params(labelsize=14)
+    ax.xaxis.set_ticks_position('bottom')  # Move ticks to the top
+    ax.xaxis.set_label_position('bottom')  # Move labels to the top
+    ax.tick_params(axis='x', top=False, labeltop=False)
+    label1 = "{:.3f}$".format(vmin)
+    label2 = "{:.3f}$".format(vmax)
+    ax.set_ylabel("Normalized Frequency Count", fontsize=14)
+    plt.savefig(output + '_stats.pdf', dpi=300, bbox_inches='tight', pad_inches=2.0 / 72.0)
+    plt.close()
+
+    # exit(0)
+    

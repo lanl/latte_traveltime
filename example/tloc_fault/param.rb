@@ -42,8 +42,8 @@ file_sy = model/sy_init.bin
 file_sz = model/sz_init.bin
 
 misfit_type = dd
+
 niter_max = 50
 
-#yn_continue = y
 dir_record = data_noisy
 dir_working = test_tloc

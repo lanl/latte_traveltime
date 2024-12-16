@@ -100,7 +100,7 @@ contains
             select case (which_medium)
 
                 case ('acoustic-iso')
-                    call forward_iso_fast_sweep_reflection( &
+                    call forward_iso_reflection( &
                         vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                         [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), &
                         refl(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), ttp_all, ttp_syn)
@@ -110,14 +110,14 @@ contains
                 case ('elastic-iso')
                     select case (incident_wave)
                         case ('p')
-                            call forward_iso_fast_sweep_reflection_elastic( &
+                            call forward_iso_reflection_elastic( &
                                 vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), &
                                 refl(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 ttp_all, tts_all, ttp_syn, tts_syn)
                         case ('s')
-                            call forward_iso_fast_sweep_reflection_elastic( &
+                            call forward_iso_reflection_elastic( &
                                 vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                                 [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), &

@@ -328,7 +328,7 @@ contains
     subroutine source_regularization
 
         real, allocatable, dimension(:, :, :) :: sx, sy, sz, st0
-        real, allocatable, dimension(:, :, :) :: sxr, syr, szr !, st0r
+        real, allocatable, dimension(:, :, :) :: sxr, syr, szr
         integer :: i, ic
         type(hdbscan_param) :: p
         integer, allocatable, dimension(:) :: unindex, sindex
@@ -342,9 +342,8 @@ contains
         real, allocatable, dimension(:) :: fx, fy, fz
         logical, allocatable, dimension(:) :: fi
         real :: d, dd
-        character(len=1024) :: ml_python
-        character(len=1024) :: ml_model_infer, ml_src_infer
-        character(len=1024) :: ml_model_refine, ml_src_refine
+        character(len=1024) :: ml_python, ml_src
+        character(len=1024) :: ml_model_infer, ml_model_refine
         integer :: ml_niter_refine
         real, allocatable, dimension(:) :: ml_xyz_weight
         real :: ml_max_dist
@@ -435,13 +434,10 @@ contains
                         f = zeros(nz, ny, nx)
 
                         call readpar_string(file_parameter, 'reg_ml_python', ml_python, 'python', required=.true.)
-                        call readpar_string(file_parameter, 'reg_ml_src_infer', ml_src_infer, '$HOME/src/latte/ml/main2_infer.py', required=.true.)
-                        call readpar_string(file_parameter, 'reg_ml_model_infer', ml_model_infer, '$HOME/src/latte/ml/infer2.model', required=.true.)
+                        call readpar_string(file_parameter, 'reg_ml_src', ml_src, '$HOME/src/latte/ml/main3.py', required=.true.)
+                        call readpar_string(file_parameter, 'reg_ml_model_infer', ml_model_infer, '$HOME/src/latte/ml/infer3.model', required=.true.)
                         call readpar_int(file_parameter, 'reg_ml_niter_refine', ml_niter_refine, 3, required=.false.)
-                        if (ml_niter_refine >= 1) then
-                            call readpar_string(file_parameter, 'reg_ml_src_refine', ml_src_refine, '$HOME/src/latte/ml/main2_refine.py', required=.true.)
-                            call readpar_string(file_parameter, 'reg_ml_model_refine', ml_model_refine, '$HOME/src/latte/ml/refine2.model', required=.true.)
-                        end if
+                        call readpar_string(file_parameter, 'reg_ml_model_refine', ml_model_refine, '$HOME/src/latte/ml/refine3.model', required=.true.)
                         call readpar_nfloat(file_parameter, 'reg_ml_xyz_weight', ml_xyz_weight, [1.0, 1.0, 1.0])
                         call assert(size(ml_xyz_weight) == 3, ' <source_regularization> Error: size(ml_xyz_weight) must = 3')
                         call readpar_xfloat(file_parameter, 'reg_ml_max_dist', ml_max_dist, float_huge, iter*1.0)
@@ -469,22 +465,13 @@ contains
                             end do
 
                             call output_array(meq, dir_iter_model(iter)//'/source_image.bin')
-
-                            call execute_command_line(tidy(ml_python)//" "//tidy(ml_src_infer) &
-                                //' --n1='//num2str(nz)//' --n2='//num2str(ny)//' --n3='//num2str(nx) &
-                                //' --model='//tidy(ml_model_infer) &
-                                //' --input='//dir_iter_model(iter)//'/source_image.bin' &
-                                //' --output='//dir_iter_model(iter)//'/source_image.bin')
-
-                            if (ml_niter_refine >=1 ) then
-                                call execute_command_line(tidy(ml_python)//" "//tidy(ml_src_refine) &
+                            call execute_command_line(tidy(ml_python)//" "//tidy(ml_src) &
                                     //' --n1='//num2str(nz)//' --n2='//num2str(ny)//' --n3='//num2str(nx) &
-                                    //' --model='//tidy(ml_model_refine) &
+                                    //' --model_infer='//tidy(ml_model_infer) &
+                                    //' --model_refine='//tidy(ml_model_refine) &
                                     //' --niter='//num2str(ml_niter_refine) &
                                     //' --input='//dir_iter_model(iter)//'/source_image.bin' &
                                     //' --output='//dir_iter_model(iter)//'/source_image.bin')
-                            end if
-
                             f = load(dir_iter_model(iter)//'/source_image.bin.fsem', nz, ny, nx)
 
                         end if

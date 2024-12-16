@@ -2,26 +2,15 @@
 import matplotlib as mplt
 import matplotlib.pyplot as plt
 import numpy
-import matplotlib as mplt
-from matplotlib import rcParams
 from matplotlib.ticker import (MultipleLocator, FixedLocator, AutoMinorLocator)
-from libpy_io import *
-from libpy_filedir import *
-from libpy_utility import *
+from python.libpy_io import *
+from python.libpy_filedir import *
+from python.libpy_utility import *
 import subprocess
 
 # fonts
-basefamily = 'sans-serif'
-basefont = 'Arial'
-fontset = 'custom'
-rcParams['font.family'] = basefamily
-rcParams['font.size'] = 14
-rcParams['font.' + basefamily] = basefont
-mplt.rcParams['mathtext.fontset'] = fontset
-mplt.rcParams['mathtext.rm'] = basefont
-mplt.rcParams['mathtext.sf'] = basefont
-mplt.rcParams['mathtext.it'] = basefont + ':italic'
-mplt.rcParams['mathtext.bf'] = basefont + ':bold'
+set_font()
+plt.rcParams.update({'font.size': 14})  # Replace 14 with your desired font size
 rcParams["xtick.top"] = True
 rcParams["xtick.labeltop"] = True
 rcParams["xtick.bottom"] = False

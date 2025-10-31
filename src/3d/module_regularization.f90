@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -424,7 +424,7 @@ contains
                             szr(sindex, 1, 1) = pr1
                             ! st0r(sindex, 1, 1) = mean(st0(sindex, 1, 1))
 
-                            call warn(date_time_compact()//' Source regularization for cluster '//num2str(ic)//' is done.')
+                            call warn(date_time_compact()//' Source regularization for cluster '//num2str(ic)//' completed.')
 
                         end do
 

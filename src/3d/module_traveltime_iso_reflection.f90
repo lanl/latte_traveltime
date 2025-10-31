@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -70,8 +70,8 @@ contains
         call forward_iso(v, d, o, sg, tt0, ttrec)
         trec(:, 1) = ttrec(:, 1)
         tall(:, :, :, 1) = tt0(:, :, :)
-        call warn(date_time_compact()//' Source '//num2str(geom%id) &
-            //' transmission traveltime computation is done. ')
+        call warn(date_time_compact()//' Shot '//num2str(geom%id) &
+            //' transmission traveltime computation completed. ')
 
         ! Compute reflection traveltime
         do l = 1, nrefl
@@ -100,8 +100,8 @@ contains
             trec(:, l + 1) = ttrec(:, 1)
             tall(:, :, :, l + 1) = tt(:, :, :)
 
-            call warn(date_time_compact()//' Source '//num2str(geom%id)//' reflector ' &
-                //num2str(l)//' traveltime computation is done. ')
+            call warn(date_time_compact()//' Shot '//num2str(geom%id)//' reflector ' &
+                //num2str(l)//' traveltime computation completed. ')
 
         end do
 
@@ -135,8 +135,8 @@ contains
         sg = geom
         call adjoint_iso(v, d, o, sg, tall(:, :, :, 1), tresidual(:, 1:1), ta)
         tadj(:, :, :, 1) = ta
-        call warn(date_time_compact()//' Source '//num2str(geom%id) &
-            //' transmission adjoint field computation is done. ')
+        call warn(date_time_compact()//' Shot '//num2str(geom%id) &
+            //' transmission adjoint field computation completed. ')
 
         ! Compute reflection adjoint field
         do l = 1, nrefl
@@ -176,8 +176,8 @@ contains
             call adjoint_iso(v, d, o, sg, tall(:, :, :, 1), tr, ta)
             tadj(:, :, :, l + 1) = tadj(:, :, :, l + 1) + ta
 
-            call warn(date_time_compact()//' Source '//num2str(geom%id)//' reflector ' &
-                //num2str(l)//' adjoint field computation is done. ')
+            call warn(date_time_compact()//' Shot '//num2str(geom%id)//' reflector ' &
+                //num2str(l)//' adjoint field computation completed. ')
 
         end do
 
@@ -235,8 +235,8 @@ contains
 
             refl(:, :, :, l) = img
 
-            call warn(date_time_compact()//' Source '//num2str(geom%id)//' reflector ' &
-                //num2str(l)//' imaging is done. ')
+            call warn(date_time_compact()//' Shot '//num2str(geom%id)//' reflector ' &
+                //num2str(l)//' imaging completed. ')
 
         end do
 
@@ -281,8 +281,8 @@ contains
         !        call forward_iso(vs, d, o, sg, tts0, ttsrec)
         !        tsrec(:, 1) = ttsrec(:, 1)
         !        tsall(:, :, :, 1) = tts0(:, :, :)
-        call warn(date_time_compact()//' Source '//num2str(geom%id) &
-            //' transmission traveltime computation is done. ')
+        call warn(date_time_compact()//' Shot '//num2str(geom%id) &
+            //' transmission traveltime computation completed. ')
 
         ! Compute reflection traveltime
         do l = 1, nrefl
@@ -317,8 +317,8 @@ contains
             tsrec(:, l + 1) = ttsrec(:, 1)
             tsall(:, :, :, l + 1) = tts(:, :, :)
 
-            call warn(date_time_compact()//' Source '//num2str(geom%id)//' reflector ' &
-                //num2str(l)//' traveltime computation is done. ')
+            call warn(date_time_compact()//' Shot '//num2str(geom%id)//' reflector ' &
+                //num2str(l)//' traveltime computation completed. ')
 
         end do
 
@@ -356,8 +356,8 @@ contains
         !        ! Based on the definition of TRTT, there should be no direct S (incident-P case) or direct P (incident-S case)
         !        call adjoint_iso(vs, d, o, sg, tsall(:, :, :, 1), tsresidual(:, 1:1), tsa)
         !        tsadj(:, :, :, 1) = tsa
-        call warn(date_time_compact()//' Source '//num2str(geom%id) &
-            //' transmission adjoint field computation is done. ')
+        call warn(date_time_compact()//' Shot '//num2str(geom%id) &
+            //' transmission adjoint field computation completed. ')
 
         ! Compute reflection adjoint field
         do l = 1, nrefl
@@ -434,8 +434,8 @@ contains
             !            call adjoint_iso(vp, d, o, sg, tpall(:, :, :, 1), tr, tpa)
             !            tpadj(:, :, :, l + 1) = tpadj(:, :, :, l + 1) + tpa
 
-            call warn(date_time_compact()//' Source '//num2str(geom%id)//' reflector ' &
-                //num2str(l)//' adjoint field computation is done. ')
+            call warn(date_time_compact()//' Shot '//num2str(geom%id)//' reflector ' &
+                //num2str(l)//' adjoint field computation completed. ')
 
         end do
 
@@ -509,8 +509,8 @@ contains
 
             refl(:, :, :, l) = imgp + imgs
 
-            call warn(date_time_compact()//' Source '//num2str(geom%id)//' reflector ' &
-                //num2str(l)//' imaging is done. ')
+            call warn(date_time_compact()//' Shot '//num2str(geom%id)//' reflector ' &
+                //num2str(l)//' imaging completed. ')
 
         end do
 

@@ -3,17 +3,14 @@
 
 We develop an open-source package for traveltime computation, tomography and source location in 2D/3D isotropic acoustic/elastic media. 
 
-The work was supported by Los Alamos National Laboratory (LANL) Laboratory Directory Research and Development (LDRD) project 20240322ER. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research used high-performance computing resources provided by LANL's Institutional Computing program. 
+The work is supported by Los Alamos National Laboratory (LANL) Laboratory Directory Research and Development (LDRD) project 20240322ER. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research used high-performance computing resources provided by LANL's Institutional Computing program. 
 
 The work is under LANL open source approval reference O4770.
-
-# Reference
-A manual will be released in the near future pending separate approval.
 
 # Requirement
 `LATTE` depends on [FLIT](https://github.com/lanl/flit). Some examples in [example](example) use [RGM](https://github.com/lanl/rgm) to generate random geological models. 
 
-The code is written in Fortran. Currently, it only support Intel's Fortran compiler, which is freely available through [Intel oneAPI Base Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/base-toolkit.html#gs.bed72v) and [Intel HPC Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/hpc-toolkit.html#gs.bed5op). We tested `LATTE` with ifort 2021.10 and ifx 2024.2. The default compiler set by the [Makefile for 2D](src/2d/Makefile) and [Makefile for 3D](src/3d/Makefile) is ifx 2024.2 (the newest version of the compiler suite). Note that per Intel's announcement, [ifort will be deprecated starting from late 2024](https://www.intel.com/content/www/us/en/developer/articles/guide/porting-guide-for-ifort-to-ifx.html). 
+The code is written in Fortran + MPI. Currently, it can only be compiled with Intel's compiler suite [Intel oneAPI HPC Toolkit](https://www.intel.com/content/www/us/en/developer/tools/oneapi/hpc-toolkit.html).
 
 # Use
 To install `LATTE`, 
@@ -41,7 +38,7 @@ cd test
 and the scripts to reproduce the examples in the mansucript are contained in subfolders. 
 
 # License
-&copy; 2024. Triad National Security, LLC. All rights reserved. 
+&copy; 2024-2025. Triad National Security, LLC. All rights reserved. 
 
 This program is Open-Source under the BSD-3 License.
 
@@ -62,5 +59,6 @@ We welcome feedbacks, bug reports, and improvement ideas on `LATTE`.
 
 If you use this package in your research and find it useful, please cite it as
 
+* Kai Gao, Ting Chen, 2024, LATTE: open-source, high-performance traveltime computation, tomography and source location in acoustic and elastic media, available at [Geophysical Journal International](https://academic.oup.com/gji/article/241/2/1275/8046728). 
 * Kai Gao, Ting Chen, 2024, LATTE: Los Alamos TravelTime package based on Eikonal equation, url: [github.com/lanl/latte_traveltime](https://github.com/lanl/latte_traveltime)
-* Kai Gao, Ting Chen, 2024, LATTE: Open-source, high-performance acoustic and elastic traveltime computation, tomography, and source location, _under review_; preprint available at [EarthArXiv](https://doi.org/10.31223/X5940K). 
+

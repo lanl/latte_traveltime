@@ -8,7 +8,7 @@
 # Triad National Security, LLC, and the U.S. Department of Energy/National
 # Nuclear Security Administration. The Government is granted for itself and
 # others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-# license in this material to reproduce, prepare. derivative works,
+# license in this material to reproduce, prepare derivative works,
 # distribute copies to the public, perform publicly and display publicly,
 # and to permit others to do so.
 #
@@ -74,12 +74,12 @@ exec4 = $(bindir)/x_tloc3
 all: makedir $(exec1) $(exec2) $(exec3) $(exec4)
 
 # options
-flitdir = $(HOME)/src/libflit
+flitdir = $(HOME)/src/flit
 
 include $(flitdir)/src/Makefile.in
 inc = $(base_inc) -I$(flitdir)/lib
 lflags = $(flitdir)/lib/libflit.a $(base_lflags)
-fflags = $(base_fflags) -Ddim3=1 -Dparallel_sweeping=1 \
+fflags = $(base_fflags) -Ddim3 \
 	#	-O0 -g -check bounds
 
 # compile

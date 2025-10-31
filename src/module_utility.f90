@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -36,6 +36,9 @@ module utility
     public :: make_iter_dir
     public :: traveltime_residual
     public :: compute_shot_misfit
+    public :: point_in_domain
+    public :: within_the_same_grid
+    public :: get_point_value_inside
 
 contains
 
@@ -214,7 +217,7 @@ contains
                     if (rankid == 0) then
                         call warn(' ')
                         call warn(date_time_compact()//' Inversion has three consecutive data misfits that are same. ')
-                        call warn(date_time_compact()//' Inversion actually stops. Exit. ')
+                        call warn(date_time_compact()//' Inversion actually stops. Exiting. ')
                         call warn(' ')
                     end if
                     call mpibarrier
@@ -255,6 +258,7 @@ contains
         integer :: i, j, l, nr
         real, allocatable, dimension(:, :, :) :: t_all
         integer :: nr_max
+        integer, allocatable, dimension(:) :: valid_p, valid_s
 
         ! The number of sources might be >> the number of stations/receivers.
         ! In such a case, using reciprocity theorem, we exchange the source and receivers
@@ -359,6 +363,9 @@ contains
             allocate (ttp(1:nr))
             allocate (tts(1:nr))
 
+            valid_p = zeros(nr)
+            valid_s = zeros(nr)
+
             ! For each virtual source (i.e., real receiver)
             call alloc_array(shot_in_rank, [0, nrank - 1, 1, 2])
             call cut(1, nr, nrank, shot_in_rank)
@@ -378,12 +385,13 @@ contains
 
                 allocate (gmtr(i)%recr(1:gmtr(i)%nr))
 
+                ! Not all virtual receivers will have new time, so set initial values to negative values
                 select case (which_medium)
                     case ('acoustic-iso', 'acoustic-tti')
-                        ttp(i)%array = zeros(gmtr(i)%nr, 1)
+                        ttp(i)%array = zeros(gmtr(i)%nr, 1) - 1.0
                     case ('elastic-iso', 'elastic-tti')
-                        ttp(i)%array = zeros(gmtr(i)%nr, 1)
-                        tts(i)%array = zeros(gmtr(i)%nr, 1)
+                        ttp(i)%array = zeros(gmtr(i)%nr, 1) - 1.0
+                        tts(i)%array = zeros(gmtr(i)%nr, 1) - 1.0
                 end select
 
                 ! For each virtual receiver (i.e., real source), nr_virtual = ns_real
@@ -394,6 +402,10 @@ contains
                     gmtr(i)%recr(j)%y = sxyz(j, 2)
                     gmtr(i)%recr(j)%z = sxyz(j, 3)
                     gmtr(i)%recr(j)%t0 = gmtr_real(j)%srcr(1)%t0
+
+                    ! Initial virtual receiver weight is set to zero; if a match is found,
+                    ! then the weight can become nonzero
+                    gmtr(i)%recr(j)%weight = 0.0
 
                     ! Virtual receiver time
                     select case (which_medium)
@@ -438,8 +450,11 @@ contains
                     call make_directory(tidy(dir_working)//'/record_processed')
                     select case (which_medium)
                         case ('acoustic-iso', 'acoustic-tti')
+                            valid_p(i) = count(ttp(i)%array >= 0)
                             call output_array(ttp(i)%array, tidy(dir_working)//'/record_processed/shot_'//num2str(i)//'_traveltime_p.bin')
                         case ('elastic-iso', 'elastic-tti')
+                            valid_p(i) = count(ttp(i)%array >= 0)
+                            valid_s(i) = count(tts(i)%array >= 0)
                             call output_array(ttp(i)%array, tidy(dir_working)//'/record_processed/shot_'//num2str(i)//'_traveltime_p.bin')
                             call output_array(tts(i)%array, tidy(dir_working)//'/record_processed/shot_'//num2str(i)//'_traveltime_s.bin')
                     end select
@@ -461,6 +476,21 @@ contains
             if (rankid == 0) then
                 call warn(date_time_compact()//' Number of virtual sources = '//num2str(ns))
                 call warn(date_time_compact()//' Number of virtual stations = '//num2str(nr_virtual))
+            end if
+
+            call allreduce_array(valid_p)
+            call allreduce_array(valid_s)
+            if (rankid == 0) then
+                select case (which_medium)
+                    case ('acoustic-iso', 'acoustic-tti')
+                        call warn(date_time_compact()//' Distribution of number of valid Tp per virtual source: ')
+                        call plot_histogram(valid_p*1.0)
+                    case ('elastic-iso', 'elastic-tti')
+                        call warn(date_time_compact()//' Distribution of number of valid Tp per virtual source: ')
+                        call plot_histogram(valid_p*1.0)
+                        call warn(date_time_compact()//' Distribution of number of valid Ts per virtual source: ')
+                        call plot_histogram(valid_s*1.0)
+                end select
             end if
 
         end if
@@ -662,5 +692,373 @@ contains
         end do
 
     end subroutine compute_shot_misfit
+
+
+#ifdef dim2
+
+    !
+    ! Check if a point is inside of the model domain
+    !
+    function point_in_domain(p, n, o, d, v) result(f)
+
+        double precision, dimension(:) :: p, o, d
+        integer, dimension(:) :: n
+        double precision, dimension(:, :) :: v
+        logical :: f
+
+        double precision :: p1, p2
+        integer :: n1, n2
+        double precision :: d1, d2, o1, o2
+        integer, dimension(1:2) :: ii, jj
+        integer :: i, j
+
+        f = .true.
+
+        n1 = n(1)
+        n2 = n(2)
+        d1 = d(1)
+        d2 = d(2)
+        o1 = o(1)
+        o2 = o(2)
+        p1 = p(1) - o1
+        p2 = p(2) - o2
+
+        if (p1 < 0 .or. p1 > (n1 - 1)*d1 &
+                .or. p2 < 0 .or. p2 > (n2 - 1)*d2) then
+            f = .false.
+            return
+        end if
+
+        ii = [floor(p1/d1) + 1, ceiling(p1/d1) + 1]
+        jj = [floor(p2/d2) + 1, ceiling(p2/d2) + 1]
+        do i = 1, 2
+            do j = 1, 2
+                if (v(ii(i), jj(j)) == 0) then
+                    f = .false.
+                    return
+                end if
+            end do
+        end do
+
+    end function point_in_domain
+
+    !
+    ! Linear interpolation to get the value of a point inside a grid
+    !
+    function get_point_value_inside(p, n, o, d, v) result(f)
+
+        double precision, dimension(:) :: p, o, d
+        integer, dimension(:) :: n
+        double precision, dimension(:, :) :: v
+        double precision :: f
+
+        double precision :: p1, p2
+        integer :: n1, n2
+        double precision :: d1, d2, o1, o2
+        integer :: i1beg, i1end
+        integer :: i2beg, i2end
+
+        f = .true.
+
+        n1 = n(1)
+        n2 = n(2)
+        d1 = d(1)
+        d2 = d(2)
+        o1 = o(1)
+        o2 = o(2)
+        p1 = p(1) - o1
+        p2 = p(2) - o2
+
+        i1beg = floor(p1/d1) + 1
+        i1end = ceiling(p1/d1) + 1
+        i2beg = floor(p2/d2) + 1
+        i2end = ceiling(p2/d2) + 1
+
+        if (i1beg == i1end .and. i2beg == i2end) then
+
+            f = v(i1beg, i2beg)
+
+        else if (i1beg == i1end .and. i2beg /= i2end) then
+
+            f = point_interp_linear( &
+                ([i2beg, i2end] - 1)*d2, &
+                v(i1beg, i2beg:i2end), &
+                p2)
+
+        else if (i1beg /= i1end .and. i2beg == i2end) then
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                v(i1beg:i1end, i2beg), &
+                p1)
+
+        else
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                ([i2beg, i2end] - 1)*d2, &
+                v(i1beg:i1end, i2beg:i2end), &
+                p1, p2)
+
+        end if
+
+    end function get_point_value_inside
+
+    !
+    ! Check if two points are in the same grid
+    !
+    function within_the_same_grid(pa, pb, o, d) result(f)
+
+        double precision, dimension(:) :: pa, pb, o, d
+        logical :: f
+
+        double precision :: p1_a, p2_a
+        double precision :: p1_b, p2_b
+        double precision :: d1, d2, o1, o2
+        integer :: i1beg_a, i1end_a
+        integer :: i2beg_a, i2end_a
+        integer :: i1beg_b, i1end_b
+        integer :: i2beg_b, i2end_b
+
+        d1 = d(1)
+        d2 = d(2)
+        o1 = o(1)
+        o2 = o(2)
+        p1_a = pa(1) - o1
+        p2_a = pa(2) - o2
+        p1_b = pb(1) - o1
+        p2_b = pb(2) - o2
+
+        i1beg_a = floor(p1_a/d1) + 1
+        i1end_a = ceiling(p1_a/d1) + 1
+        i2beg_a = floor(p2_a/d2) + 1
+        i2end_a = ceiling(p2_a/d2) + 1
+
+        i1beg_b = floor(p1_b/d1) + 1
+        i1end_b = ceiling(p1_b/d1) + 1
+        i2beg_b = floor(p2_b/d2) + 1
+        i2end_b = ceiling(p2_b/d2) + 1
+
+        f = i1beg_a == i1beg_b &
+            .and. i1end_a == i1end_b &
+            .and. i2beg_a == i2beg_b &
+            .and. i2end_a == i2end_b
+
+    end function within_the_same_grid
+
+#endif
+
+#ifdef dim3
+
+    !
+    ! Check if a point is inside of the model domain
+    !
+    function point_in_domain(p, n, o, d, v) result(f)
+
+        double precision, dimension(:) :: p, o, d
+        integer, dimension(:) :: n
+        double precision, dimension(:, :, :) :: v
+        logical :: f
+
+        double precision :: p1, p2, p3
+        integer :: n1, n2, n3
+        double precision :: d1, d2, d3, o1, o2, o3
+        integer, dimension(1:2) :: ii, jj, kk
+        integer :: i, j, k
+
+        f = .true.
+
+        n1 = n(1)
+        n2 = n(2)
+        n3 = n(3)
+        d1 = d(1)
+        d2 = d(2)
+        d3 = d(3)
+        o1 = o(1)
+        o2 = o(2)
+        o3 = o(3)
+        p1 = p(1) - o1
+        p2 = p(2) - o2
+        p3 = p(3) - o3
+
+        if (p1 < 0 .or. p1 > (n1 - 1)*d1 &
+                .or. p2 < 0 .or. p2 > (n2 - 1)*d2 &
+                .or. p3 < 0 .or. p3 > (n3 - 1)*d3) then
+            f = .false.
+            return
+        end if
+
+        ii = [floor(p1/d1) + 1, ceiling(p1/d1) + 1]
+        jj = [floor(p2/d2) + 1, ceiling(p2/d2) + 1]
+        kk = [floor(p3/d3) + 1, ceiling(p3/d3) + 1]
+        do i = 1, 2
+            do j = 1, 2
+                do k = 1, 2
+                    if (v(ii(i), jj(j), kk(k)) == 0) then
+                        f = .false.
+                        return
+                    end if
+                end do
+            end do
+        end do
+
+    end function point_in_domain
+
+    !
+    ! Linear interpolation to get the value of a point inside a grid
+    !
+    function get_point_value_inside(p, n, o, d, v) result(f)
+
+        double precision, dimension(:) :: p, o, d
+        integer, dimension(:) :: n
+        double precision, dimension(:, :, :) :: v
+        double precision :: f
+
+        double precision :: p1, p2, p3
+        integer :: n1, n2, n3
+        double precision :: d1, d2, d3, o1, o2, o3
+        integer :: i1beg, i1end
+        integer :: i2beg, i2end
+        integer :: i3beg, i3end
+
+        f = .true.
+
+        n1 = n(1)
+        n2 = n(2)
+        n3 = n(3)
+        d1 = d(1)
+        d2 = d(2)
+        d3 = d(3)
+        o1 = o(1)
+        o2 = o(2)
+        o3 = o(3)
+        p1 = p(1) - o1
+        p2 = p(2) - o2
+        p3 = p(3) - o3
+
+        i1beg = floor(p1/d1) + 1
+        i1end = ceiling(p1/d1) + 1
+        i2beg = floor(p2/d2) + 1
+        i2end = ceiling(p2/d2) + 1
+        i3beg = floor(p3/d3) + 1
+        i3end = ceiling(p3/d3) + 1
+
+        if (i1beg == i1end .and. i2beg == i2end .and. i3beg == i3end) then
+
+            f = v(i1beg, i2beg, i3beg)
+
+        else if (i1beg == i1end .and. i2beg == i2end .and. i3beg /= i3end) then
+
+            f = point_interp_linear( &
+                ([i3beg, i3end] - 1)*d3, &
+                v(i1beg, i2beg, i3beg:i3end), &
+                p3)
+
+        else if (i1beg == i1end .and. i2beg /= i2end .and. i3beg == i3end) then
+
+            f = point_interp_linear( &
+                ([i2beg, i2end] - 1)*d2, &
+                v(i1beg, i2beg:i2end, i3beg), &
+                p2)
+
+        else if (i1beg /= i1end .and. i2beg == i2end .and. i3beg == i3end) then
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                v(i1beg:i1end, i2beg, i3beg), &
+                p1)
+
+        else if (i1beg == i1end .and. i2beg /= i2end .and. i3beg /= i3end) then
+
+            f = point_interp_linear( &
+                ([i2beg, i2end] - 1)*d2, &
+                ([i3beg, i3end] - 1)*d3, &
+                v(i1beg, i2beg:i2end, i3beg:i3end), &
+                p2, p3)
+
+        else if (i1beg /= i1end .and. i2beg == i2end .and. i3beg /= i3end) then
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                ([i3beg, i3end] - 1)*d3, &
+                v(i1beg:i1end, i2beg, i3beg:i3end), &
+                p1, p3)
+
+        else if (i1beg /= i1end .and. i2beg /= i2end .and. i3beg == i3end) then
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                ([i2beg, i2end] - 1)*d2, &
+                v(i1beg:i1end, i2beg:i2end, i3beg), &
+                p1, p2)
+
+        else
+
+            f = point_interp_linear( &
+                ([i1beg, i1end] - 1)*d1, &
+                ([i2beg, i2end] - 1)*d2, &
+                ([i3beg, i3end] - 1)*d3, &
+                v(i1beg:i1end, i2beg:i2end, i3beg:i3end), &
+                p1, p2, p3)
+
+        end if
+
+    end function get_point_value_inside
+
+    !
+    ! Check if two points are in the same grid
+    !
+    function within_the_same_grid(pa, pb, o, d) result(f)
+
+        double precision, dimension(:) :: pa, pb, o, d
+        logical :: f
+
+        double precision :: p1_a, p2_a, p3_a
+        double precision :: p1_b, p2_b, p3_b
+        double precision :: d1, d2, d3, o1, o2, o3
+        integer :: i1beg_a, i1end_a
+        integer :: i2beg_a, i2end_a
+        integer :: i3beg_a, i3end_a
+        integer :: i1beg_b, i1end_b
+        integer :: i2beg_b, i2end_b
+        integer :: i3beg_b, i3end_b
+
+        d1 = d(1)
+        d2 = d(2)
+        d3 = d(3)
+        o1 = o(1)
+        o2 = o(2)
+        o3 = o(3)
+        p1_a = pa(1) - o1
+        p2_a = pa(2) - o2
+        p3_a = pa(3) - o3
+        p1_b = pb(1) - o1
+        p2_b = pb(2) - o2
+        p3_b = pb(3) - o3
+
+        i1beg_a = floor(p1_a/d1) + 1
+        i1end_a = ceiling(p1_a/d1) + 1
+        i2beg_a = floor(p2_a/d2) + 1
+        i2end_a = ceiling(p2_a/d2) + 1
+        i3beg_a = floor(p3_a/d3) + 1
+        i3end_a = ceiling(p3_a/d3) + 1
+
+        i1beg_b = floor(p1_b/d1) + 1
+        i1end_b = ceiling(p1_b/d1) + 1
+        i2beg_b = floor(p2_b/d2) + 1
+        i2end_b = ceiling(p2_b/d2) + 1
+        i3beg_b = floor(p3_b/d3) + 1
+        i3end_b = ceiling(p3_b/d3) + 1
+
+        f = i1beg_a == i1beg_b &
+            .and. i1end_a == i1end_b &
+            .and. i2beg_a == i2beg_b &
+            .and. i2end_a == i2end_b &
+            .and. i3beg_a == i3beg_b &
+            .and. i3end_a == i3end_b
+
+    end function within_the_same_grid
+
+#endif
 
 end module utility

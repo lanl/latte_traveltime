@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -140,7 +140,7 @@ contains
                     call input_array(w, file_update)
                 else
                     if (rankid == 0) then
-                        call warn(' Error: Updated parameter model '//tidy(name)//' does not exist. Exit. ')
+                        call warn(' Error: Updated parameter model '//tidy(name)//' not found. Exiting. ')
                     end if
                     stop
                 end if

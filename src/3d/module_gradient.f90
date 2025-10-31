@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -150,11 +150,7 @@ contains
                     dir_iter_model(iter)//'/grad_'//tidy(model_name(i))//'.bin')
             end do
 
-            if (nmodel > 1) then
-                call warn(date_time_compact()//' >>>>>>>>>> Gradients are saved. ')
-            else
-                call warn(date_time_compact()//' >>>>>>>>>> Gradient is saved. ')
-            end if
+            call warn(date_time_compact()//' >>>>>>>>>> Gradient saved. ')
 
         end if
 

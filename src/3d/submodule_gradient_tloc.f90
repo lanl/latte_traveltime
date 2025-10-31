@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -159,7 +159,7 @@ contains
             end select
 
             call warn(date_time_compact()//' Shot '//num2str(gmtr(ishot)%id) &
-                //' traveltime computation is done. ')
+                //' traveltime computation completed. ')
 
             if (sum(data_misfit) == 0) then
                 ! Copy initial iteration synthetic data to dir_working/iteration_0
@@ -296,7 +296,7 @@ contains
                     end do
 
                     call warn(date_time_compact()//' >> Shot '//num2str(gmtr(ishot)%id) &
-                        //' gradient computation is done. ')
+                        //' gradient computation completed. ')
 
                 case ('elastic-iso')
 
@@ -428,7 +428,7 @@ contains
                     end do
 
                     call warn(date_time_compact()//' >> Shot '//num2str(gmtr(ishot)%id) &
-                        //' gradient computation is done. ')
+                        //' gradient computation completed. ')
 
             end select
 
@@ -624,7 +624,7 @@ contains
             end select
 
             call warn(date_time_compact()//' Shot '//num2str(gmtr(ishot)%id) &
-                //' traveltime computation is done. ')
+                //' traveltime computation completed. ')
 
             if (sum(data_misfit) == 0) then
                 ! Copy initial iteration synthetic data to dir_working/iteration_0
@@ -808,7 +808,7 @@ contains
                     end do
 
                     call warn(date_time_compact()//' >> Shot '//num2str(gmtr(ishot)%id) &
-                        //' gradient computation is done. ')
+                        //' gradient computation completed. ')
 
                 case ('elastic-iso')
 
@@ -942,7 +942,7 @@ contains
                     end do
 
                     call warn(date_time_compact()//' >> Shot '//num2str(gmtr(ishot)%id) &
-                        //' gradient computation is done. ')
+                        //' gradient computation completed. ')
 
             end select
 

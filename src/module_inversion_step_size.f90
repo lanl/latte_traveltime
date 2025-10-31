@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -452,7 +452,7 @@ contains
         end do
         if (.not. step_suitable) then
             if (rankid == 0) then
-                call warn(date_time_compact()//' Error: Cannot find a suitable initial step size. Exit. ')
+                call warn(date_time_compact()//' Error: Cannot find a suitable initial step size. Exiting. ')
             end if
             call mpibarrier
             call mpiend
@@ -510,7 +510,7 @@ contains
 
         if (.not. (step_scaling_factor <= float_huge)) then
             if (rankid == 0) then
-                call warn(date_time_compact()//' <compute_step_size_linear> Error: Step size is NaN. Exit. ')
+                call warn(date_time_compact()//' <compute_step_size_linear> Error: Step size is NaN. Exiting. ')
                 call mpi_abort(mpi_comm_world, mpi_err_other, mpi_ierr)
             end if
         end if
@@ -609,7 +609,7 @@ contains
 
         ! Print info
         if (rankid == 0) then
-            call warn(date_time_compact()//' >>>>>>>>>> Step size computation is done.')
+            call warn(date_time_compact()//' >>>>>>>>>> Step size computation completed.')
         end if
 
         ! update model and output updated model for current iteration
@@ -656,7 +656,7 @@ contains
         if (.not. step_suitable) then
             if (rankid == 0) then
                 call warn(date_time_compact() &
-                    //' Error: Cannot find a suitable initial step size. Exit. ')
+                    //' Error: Cannot find a suitable initial step size. Exiting. ')
                 ! call warn(date_time_compact()//' one of more parameters have reached their assigned limits ')
             end if
             call mpibarrier
@@ -836,7 +836,7 @@ contains
         ! Print info
         !    call date_time_compact(string_date_time)
         if (rankid == 0) then
-            call warn(date_time_compact()//' >>>>>>>>>> Step size computation is done. ')
+            call warn(date_time_compact()//' >>>>>>>>>> Step size computation completed. ')
         end if
 
         ! update model and output
@@ -880,7 +880,7 @@ contains
         end do
         if (.not. step_suitable) then
             if (rankid == 0) then
-                call warn(date_time_compact()//' Error: Cannot find a suitable initial step size. Exit. ')
+                call warn(date_time_compact()//' Error: Cannot find a suitable initial step size. Exiting. ')
             end if
             call mpibarrier
             call mpiend
@@ -931,7 +931,7 @@ contains
 
         ! Print info
         if (rankid == 0) then
-            call warn(date_time_compact()//' >>>>>>>>>> Step size computation is done. ')
+            call warn(date_time_compact()//' >>>>>>>>>> Step size computation completed. ')
         end if
 
         ! update model and output

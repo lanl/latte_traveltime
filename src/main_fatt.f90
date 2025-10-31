@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -36,7 +36,7 @@ program main
     if (command_argument_count() == 0) then
         if (rankid == 0) then
             call warn('')
-            call warn(date_time_compact()//' Error: Parameter file does not exist. Exit. ')
+            call warn(date_time_compact()//' Error: Parameter file not found. Exiting. ')
             call warn('')
         end if
         call mpibarrier
@@ -51,7 +51,7 @@ program main
     if (rankid == 0) then
         call warn('')
         call warn(tile('=', 80))
-        call warn(center_substring('First-Arrival Traveltime Tomography Starts', 80))
+        call warn(center_substring('First-Arrival Traveltime Tomography Begins', 80))
         call warn('')
         call print_date_time
         call warn('')
@@ -122,7 +122,7 @@ program main
         call warn('')
         call print_date_time
         call warn('')
-        call warn(center_substring('FATT ends', 80))
+        call warn(center_substring('FATT Completed', 80))
         call warn(tile('=', 80))
         call warn('')
     end if

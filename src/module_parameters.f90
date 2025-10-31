@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -267,7 +267,7 @@ contains
         ! Check existence of the parameter file
         if (.not. file_exists(file_parameter)) then
             call warn(date_time_compact()//' <read_parameters> Error: Parameter file = ' &
-                //tidy(file_parameter)//' does not exist. Exit. ')
+                //tidy(file_parameter)//' not found. Exiting. ')
             call mpibarrier
             call mpistop
         end if
@@ -470,7 +470,7 @@ contains
             call readpar_float(file_parameter, 'reflector_imaging_threshold', reflector_imaging_threshold, 1.0e-9)
             call readpar_int(file_parameter, 'nrefl', nrefl, 1)
             call readpar_nfloat(file_parameter, 'misfit_weight', misfit_weight, ones(nrefl + 1))
-            call assert(size(misfit_weight) == nrefl + 1, ' <read_parameter> Error: size(misfit_weight) must be nrefl + 1. Exit. ')
+            call assert(size(misfit_weight) == nrefl + 1, ' <read_parameter> Error: size(misfit_weight) must be nrefl + 1. Exiting. ')
             if (any_in(['refl'], model_name)) then
                 yn_update_reflector = .true.
             end if
@@ -532,7 +532,7 @@ contains
         end if
         allocate (gmtr(1:ns))
         if (.not. file_exists(file_geometry)) then
-            call warn(date_time_compact()//' @'//get_hostname() //' Error: Geometry file does not exist. ')
+            call warn(date_time_compact()//' @'//get_hostname() //' Error: Geometry file not found. ')
             stop
         else
             dir_geometry = get_file_directory(file_geometry)
@@ -569,8 +569,7 @@ contains
                 gmtr(i)%recr(:)%y = 0.5*(ymin + ymax)
             end if
 
-            if ((mod(i, max(nint(ns/10.0), 1)) == 0 .or. i == ns .or. i == 1) .and. &
-                    rankid == 0) then
+            if ((mod(i, max(nint(ns/10.0), 1)) == 0 .or. i == ns .or. i == 1) .and. rankid == 0) then
                 call warn(date_time_compact()//' Loading geometry '//num2str(i)//' of '//num2str(ns))
             end if
 
@@ -689,7 +688,7 @@ contains
 
         ! If no qualified shots, then stop
         if (.not. any(qs)) then
-            call warn(date_time_compact()//' @'//get_hostname()//' Error: No shot or receiver in the model. ')
+            call warn(date_time_compact()//' @'//get_hostname()//' Error: No source or receiver in the model. ')
             stop
         end if
 
@@ -706,9 +705,6 @@ contains
         gmtr = g(1:l - 1)
         deallocate(g)
 
-        ! The following pack(gmtr) works with ifort, but not new ifx...
-        ! To avoid potential segmentation fault, use the above hard way to pack
-        !        gmtr = pack(gmtr, mask=qs)
         ns = size(gmtr)
 
         ! If any duplicate source id, then stop
@@ -909,7 +905,7 @@ contains
         shot_nz = shot_nzend - shot_nzbeg + 1
 
         if (verbose) then
-            call warn(date_time_compact()//' Source '//num2str(gmtr(ishot)%id)//' dimensions:')
+            call warn(date_time_compact()//' Shot '//num2str(gmtr(ishot)%id)//' dimensions:')
             call warn(date_time_compact()//'      xmin, xmax = ' &
                 //num2str(shot_xbeg, '(es)')//', '//num2str(shot_xend, '(es)'))
             if (shot_ny > 1) then
@@ -933,6 +929,8 @@ contains
             end if
             call warn(date_time_compact()//'      nzmin, nzmax = ' &
                 //num2str(shot_nzbeg)//', '//num2str(shot_nzend))
+            call warn(date_time_compact()//'      ns, nr = ' &
+                //num2str(count(geom%srcr(:)%amp /= 0))//', '//num2str(count(geom%recr(:)%weight /= 0)))
         end if
 
     end subroutine set_adaptive_model_range

@@ -8,7 +8,7 @@
 ! Triad National Security, LLC, and the U.S. Department of Energy/National
 ! Nuclear Security Administration. The Government is granted for itself and
 ! others acting on its behalf a nonexclusive, paid-up, irrevocable worldwide
-! license in this material to reproduce, prepare. derivative works,
+! license in this material to reproduce, prepare derivative works,
 ! distribute copies to the public, perform publicly and display publicly,
 ! and to permit others to do so.
 !
@@ -46,7 +46,7 @@ program main
     if (command_argument_count() == 0) then
         if (rankid == 0) then
             call warn('')
-            call warn(date_time_compact()//' Error: Parameter file is missing. Exit. ')
+            call warn(date_time_compact()//' Error: Parameter file not found. Exiting. ')
             call warn('')
         end if
         call mpibarrier
@@ -56,7 +56,7 @@ program main
     if (rankid == 0) then
         call warn('')
         call warn(tile('=', 80))
-        call warn(center_substring('Eikonal Traveltime Computation Starts', 80))
+        call warn(center_substring('Eikonal Traveltime Computation Begins', 80))
         call warn('')
         call print_date_time
         call warn('')
@@ -250,7 +250,7 @@ program main
 
         end select
 
-        call warn(date_time_compact()//' Source '//num2str(gmtr(ishot)%id)//' traveltime computation is done. ')
+        call warn(date_time_compact()//' Shot '//num2str(gmtr(ishot)%id)//' traveltime computation completed. ')
 
     end do
 
@@ -260,7 +260,7 @@ program main
         call warn('')
         call print_date_time
         call warn('')
-        call warn(center_substring('EIKONAL ends', 80))
+        call warn(center_substring('EIKONAL Completed', 80))
         call warn(tile('=', 80))
         call warn('')
     end if

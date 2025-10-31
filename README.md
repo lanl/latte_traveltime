@@ -1,9 +1,9 @@
 # Description
 **LATTE: Los Alamos TravelTime package based on Eikonal equation**
 
-We develop an open-source package for traveltime computation, tomography and source location in 2D/3D isotropic acoustic/elastic media. 
+This is an open-source software for traveltime computation based on the eikonal equation, adjoint-state first-arrival traveltime tomography, and source location in 2D/3D isotropic acoustic/elastic media. 
 
-The work is supported by Los Alamos National Laboratory (LANL) Laboratory Directory Research and Development (LDRD) project 20240322ER. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research used high-performance computing resources provided by LANL's Institutional Computing program. 
+The work is supported by Los Alamos National Laboratory (LANL) Laboratory Directory Research and Development (LDRD) project 20240322ER. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research uses high-performance computing resources provided by LANL's Institutional Computing (IC) program. 
 
 The work is under LANL open source approval reference O4770.
 
@@ -55,10 +55,10 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 # Author
 Kai Gao, <kaigao@lanl.gov>
 
-We welcome feedbacks, bug reports, and improvement ideas on `LATTE`. 
+We welcome feedback, bug reports, and suggestions for improving `LATTE`. 
 
 If you use this package in your research and find it useful, please cite it as
 
-* Kai Gao, Ting Chen, 2024, LATTE: open-source, high-performance traveltime computation, tomography and source location in acoustic and elastic media, available at [Geophysical Journal International](https://academic.oup.com/gji/article/241/2/1275/8046728). 
-* Kai Gao, Ting Chen, 2024, LATTE: Los Alamos TravelTime package based on Eikonal equation, url: [github.com/lanl/latte_traveltime](https://github.com/lanl/latte_traveltime)
+* Kai Gao, Ting Chen, 2025, LATTE: open-source, high-performance traveltime computation, tomography and source location in acoustic and elastic media, [Geophysical Journal International](https://academic.oup.com/gji/article/241/2/1275/8046728), doi: 10.1093/gji/ggaf079. 
+* Kai Gao, Ting Chen, 2024, LATTE: Los Alamos TravelTime package based on Eikonal equation, GitHub Repository, url: [github.com/lanl/latte_traveltime](https://github.com/lanl/latte_traveltime)
 

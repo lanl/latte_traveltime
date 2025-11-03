@@ -51,7 +51,7 @@ contains
         ! Update dual variable
         reg = model - reg
 
-        ! regularization scale
+        ! Set regularization weights
         call readpar_xlogical(file_parameter, 'const_reg', const_reg, .false., iter*1.0)
         if (const_reg) then
 
@@ -61,10 +61,10 @@ contains
 
             call readpar_xfloat(file_parameter, 'reg_scale_'//tidy(name), reg_scale, 0.2, iter*1.0)
             if (rankid == 0) then
-                call warn(date_time_compact()//' L2 regularization scale for '//tidy(name)//' = '//num2str(reg_scale, '(es)'))
+                call warn(date_time_compact()//' Regularization scale for '//tidy(name)//' = '//num2str(reg_scale, '(es)'))
             end if
 
-            ! Compute regularization coefficient for each parameter
+            ! Compute regularization weight for each parameter
             if (maxval(abs(reg)) == 0) then
                 reg_coef = 0.0
             else
@@ -74,7 +74,7 @@ contains
         end if
 
         if (rankid == 0) then
-            call warn(date_time_compact()//' L2 regularization coef '//tidy(name)//' = '//num2str(reg_coef, '(es)'))
+            call warn(date_time_compact()//' Regularization coefficient for '//tidy(name)//' = '//num2str(reg_coef, '(es)'))
         end if
 
         ! modify gradients
@@ -90,7 +90,7 @@ contains
     end subroutine add_l2reg_single_parameter
 
     !
-    !> L2 regularization
+    !> Add regularization
     !
     subroutine add_l2reg
 
@@ -124,7 +124,7 @@ contains
     end subroutine regularize_gradient
 
     !
-    !> Updated ADMM variables
+    !> Update regularization variables
     !
     subroutine compute_regularization
 

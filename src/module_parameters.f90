@@ -106,6 +106,7 @@ module parameters
     real, allocatable, dimension(:) :: data_misfit
     real, allocatable, dimension(:, :) :: shot_misfit
     real, allocatable, dimension(:) :: misfit_weight
+    real :: jumpout_factor = 1.05
 
     ! maximum and minimum offset
     real :: offset_min = 0.0d0
@@ -399,6 +400,7 @@ contains
         call readpar_nstring(file_parameter, 'process_record', record_processing, [''])
         call readpar_nstring(file_parameter, 'process_synthetic', synthetic_processing, [''])
         call readpar_logical(file_parameter, 'yn_flat_stop', yn_flat_stop, .false.)
+        call readpar_float(file_parameter, 'jumpout_factor', jumpout_factor, 1.0)
 
         if (which_program == 'eikonal') then
 

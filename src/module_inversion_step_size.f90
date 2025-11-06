@@ -553,7 +553,7 @@ contains
         else
             ! Otherwise, use conventional trial-error approach
 
-            do while (trial_misfit > data_misfit_current .and. cnt < nsearch_max)
+            do while (trial_misfit > jumpout_factor*data_misfit_current .and. cnt < nsearch_max)
 
                 step_scaling_factor = step_scaling_factor/2.0
 
@@ -574,7 +574,7 @@ contains
 
             end do
 
-            if (trial_misfit > data_misfit_current) then
+            if (trial_misfit > jumpout_factor*data_misfit_current) then
                 ! When searching the optimal step size, if the trial step size
                 ! at the final trial cannot produce a smaller data misfit than
                 ! that of the last iteration, then set step size to zero
@@ -806,7 +806,7 @@ contains
 
         123 continue
 
-        if (fc >= misfit0) then
+        if (fc >= jumpout_factor*misfit0) then
             ! When searching optimal step size, if the trial step size
             ! at the final trial cannot produce a smaller data misfit than
             ! that of the last iteration, then set step size to zero

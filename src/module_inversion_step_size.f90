@@ -949,6 +949,9 @@ contains
     !
     subroutine compute_step_size
 
+        ! Define a relaxation factor that allows later-iteration misfit > current iteration
+        call readpar_xfloat(file_parameter, 'jumpout_factor', jumpout_factor, 1.0, 1.0*iter)
+
         select case (step_size_method)
             case ('linear')
                 call compute_step_size_linear

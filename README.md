@@ -31,7 +31,6 @@ Algorithm features (details are explained in [the LATTE paper](https://academic.
     - smooth: Tikhonov-like smoothing regularization for medium parameters
     - ML: machine-learning-based regularization for source location parameters
 - User-friendly parameter setting based on [FLIT](https://github.com/lanl/flit) flexible parameter input functionality. 
-- User-friendly geometry setting. 
 
 `LATTE` does not yet support:
 - Curvilinear or unstructured mesh. 
@@ -94,11 +93,11 @@ We welcome feedback, bug reports, and suggestions for improving `LATTE`.
 
 If you use this package in your research and find it useful, please cite it as
 
+* Kai Gao, 2024, LATTE: Los Alamos TravelTime package based on Eikonal equation, GitHub Repository, url: [github.com/lanl/latte_traveltime](https://github.com/lanl/latte_traveltime)
 * Kai Gao, Ting Chen, 2025, LATTE: open-source, high-performance traveltime computation, tomography and source location in acoustic and elastic media, Geophysical Journal International, doi: [10.1093/gji/ggaf079](https://academic.oup.com/gji/article/241/2/1275/8046728). 
-* Kai Gao, Ting Chen, 2024, LATTE: Los Alamos TravelTime package based on Eikonal equation, GitHub Repository, url: [github.com/lanl/latte_traveltime](https://github.com/lanl/latte_traveltime)
 
 # Examples
-Reproducible examples associated with [the paper](https://academic.oup.com/gji/article/241/2/1275/8046728) is in the `example` directory. Below are some of the figures from the paper. Please refer to the [the LATTE paper](https://academic.oup.com/gji/article/241/2/1275/8046728) for details. 
+Reproducible examples associated with [the LATTE paper](https://academic.oup.com/gji/article/241/2/1275/8046728) are in the `example` directory. Below are some of the figures from the paper. Please refer to the paper for full details. 
 
 <p align="center">
   <img src="doc/forward/vp.png" alt="" width="240"><br>

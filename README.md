@@ -16,7 +16,7 @@
 
 Algorithm features (details are explained in [the LATTE paper](https://academic.oup.com/gji/article/241/2/1275/8046728)):
 
-- Mostly written in modern Fortran. 
+- Written in modern Fortran. 
 - Applies to Cartesian, regularly sampled grid. 
 - Forward and adjoint-state equations are solved with the fast-sweeping method. 
 - Traveltime computation is based on the factorized eikonal equation for avoiding source singularity and thus improved accuracy. 
@@ -101,23 +101,23 @@ If you use this package in your research and find it useful, please cite it as
 Reproducible examples associated with [the paper](https://academic.oup.com/gji/article/241/2/1275/8046728) is in the `example` directory. Below are some of the figures from the paper. Please refer to the [the LATTE paper](https://academic.oup.com/gji/article/241/2/1275/8046728) for details. 
 
 <p align="center">
-  <img src="doc/forward/vp.png" alt="" width="200"><br>
-  <img src="doc/forward/elastic_p_p.png" alt="" width="200"><br>
-  <img src="doc/forward/elastic_p_ps2.png" alt="" width="200"><br>
-  <img src="doc/forward/data_p.png" alt="" width="200"><br>
+  <img src="doc/forward/vp.png" alt="" width="240"><br>
+  <img src="doc/forward/elastic_p_p.png" alt="" width="240"><br>
+  <img src="doc/forward/elastic_p_ps2.png" alt="" width="240"><br>
+  <img src="doc/forward/data_p.png" alt="" width="240"><br>
 </p>
 <p align="center"><strong>2D forward modeling. From top to bottom: Vp (Vs is scaled based on Vp), PP traveltime field, PS transmission-reflection traveltime field, P traveltime data. Reflector position plot is not shown here. </strong> </p>
 
 <p align="center">
-  <img src="doc/fatt/vp.png" alt="" width="200"><br>
-  <img src="doc/fatt/vp_init.png" alt="" width="200"><br>
-  <img src="doc/fatt/vp_ad.png" alt="" width="200"><br>
-  <img src="doc/fatt/vp_dd.png" alt="" width="200"><br>
+  <img src="doc/fatt/vp.png" alt="" width="240"><br>
+  <img src="doc/fatt/vp_init.png" alt="" width="240"><br>
+  <img src="doc/fatt/vp_ad.png" alt="" width="240"><br>
+  <img src="doc/fatt/vp_dd.png" alt="" width="240"><br>
 </p>
 <p align="center"><strong>2D FATT. From top to bottom: Vp ground truth, Vp initial, Vp by absolute-difference FATT, and Vp by double-difference FATT. </strong> </p>
 
 <p align="center">
-  <img src="doc/tloc/loc_dd_elastic_source_convergence.png" alt="" width="200"><br>
-  <img src="doc/tloc/tomo_dd_elastic_source_convergence.png" alt="" width="200"><br>
+  <img src="doc/tloc/loc_dd_elastic_source_convergence.png" alt="" width="240"><br>
+  <img src="doc/tloc/tomo_dd_elastic_source_convergence.png" alt="" width="240"><br>
 </p>
 <p align="center"><strong>2D source location in an elastic medium. Top: source location convergence with known velocity models, and bottom: joint tomography and source location. </strong> </p>

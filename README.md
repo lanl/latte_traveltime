@@ -2,13 +2,17 @@
 **LATTE: Los Alamos TravelTime package based on Eikonal equation**
 
 `LATTE` is an open-source software for 
-- **Traveltime computation** based on eikonal equation in 2D/3D acoustic/elastic media
+- **Traveltime computation** based on eikonal equation in 2D/3D acoustic/elastic media and based on 
     - First-arrival P, S traveltimes
     - Both first-arrival and reflection traveltimes (e.g., P, S, PP, SS, PS, SP) for an arbitrary number of reflectors. 
-- **Adjoint-state first-arrival traveltime tomography** based on first-arrival traveltime in 2D/3D acoustic/elastic media
+- **Adjoint-state first-arrival traveltime tomography** based on first-arrival traveltime in 2D/3D acoustic/elastic media to 
+    - Invert Vp, Vs separately
+    - Invert Vp, Vs jointly, optionally with Vp-Vs constraints
+    - Use either absolute traveltime difference or differential traveltime difference 
 - **Source location** based on first-arrival traveltime in 2D/3D acoustic/elastic media, including
     - Source location/relocation using P, S, or both P and S traveltimes
     - Joint source location/relocation with first-arrival traveltime tomography using P, S, or both P and S traveltimes
+    - Use either absolute traveltime difference or differential traveltime difference 
 
 Algorithm features (details are explained in [the LATTE paper](https://academic.oup.com/gji/article/241/2/1275/8046728)):
 
@@ -34,7 +38,7 @@ Algorithm features (details are explained in [the LATTE paper](https://academic.
 - Medium anisotropy.
 - GPU-based acceleration. 
 
-The work is supported by Los Alamos National Laboratory (LANL) Laboratory Directory Research and Development (LDRD) project 20240322ER. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research uses high-performance computing resources provided by LANL's Institutional Computing (IC) program. 
+The work is supported by Los Alamos National Laboratory (LANL) Laboratory Directory Research and Development (LDRD) project 20240322ER. LANL is operated by Triad National Security, LLC, for the National Nuclear Security Administration (NNSA) of the U.S. Department of Energy (DOE) under Contract No. 89233218CNA000001. The research uses high-performance computing resources provided by LANL's Institutional Computing (IC) program. The work is approved for public release under LA-UR-24-27806. 
 
 The codes are released under LANL open source approval reference O4770.
 
@@ -68,9 +72,6 @@ cd test
 
 and the scripts to reproduce the examples in the mansucript are contained in subfolders. 
 
-# Examples
-Reproducible examples associated with [the paper](https://academic.oup.com/gji/article/241/2/1275/8046728) is in the `example` directory. 
-
 # License
 &copy; 2024-2026. Triad National Security, LLC. All rights reserved. 
 
@@ -96,3 +97,27 @@ If you use this package in your research and find it useful, please cite it as
 * Kai Gao, Ting Chen, 2025, LATTE: open-source, high-performance traveltime computation, tomography and source location in acoustic and elastic media, Geophysical Journal International, doi: [10.1093/gji/ggaf079](https://academic.oup.com/gji/article/241/2/1275/8046728). 
 * Kai Gao, Ting Chen, 2024, LATTE: Los Alamos TravelTime package based on Eikonal equation, GitHub Repository, url: [github.com/lanl/latte_traveltime](https://github.com/lanl/latte_traveltime)
 
+# Examples
+Reproducible examples associated with [the paper](https://academic.oup.com/gji/article/241/2/1275/8046728) is in the `example` directory. Below are some of the figures from the paper. Please refer to the [the LATTE paper](https://academic.oup.com/gji/article/241/2/1275/8046728) for details. 
+
+<p align="center">
+  <img src="doc/forward/vp.png" alt="" width="200"><br>
+  <img src="doc/forward/elastic_p_p.png" alt="" width="200"><br>
+  <img src="doc/forward/elastic_p_ps2.png" alt="" width="200"><br>
+  <img src="doc/forward/data_p.png" alt="" width="200"><br>
+</p>
+<p align="center"><strong>2D forward modeling. From top to bottom: Vp (Vs is scaled based on Vp), PP traveltime field, PS transmission-reflection traveltime field, P traveltime data. Reflector position plot is not shown here. </strong> </p>
+
+<p align="center">
+  <img src="doc/fatt/vp.png" alt="" width="200"><br>
+  <img src="doc/fatt/vp_init.png" alt="" width="200"><br>
+  <img src="doc/fatt/vp_ad.png" alt="" width="200"><br>
+  <img src="doc/fatt/vp_dd.png" alt="" width="200"><br>
+</p>
+<p align="center"><strong>2D FATT. From top to bottom: Vp ground truth, Vp initial, Vp by absolute-difference FATT, and Vp by double-difference FATT. </strong> </p>
+
+<p align="center">
+  <img src="doc/tloc/loc_dd_elastic_source_convergence.png" alt="" width="200"><br>
+  <img src="doc/tloc/tomo_dd_elastic_source_convergence.png" alt="" width="200"><br>
+</p>
+<p align="center"><strong>2D source location in an elastic medium. Top: source location convergence with known velocity models, and bottom: joint tomography and source location. </strong> </p>

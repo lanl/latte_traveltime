@@ -71,7 +71,7 @@ module parameters
 
     ! only compute misfit
     logical :: yn_misfit_only
-    real :: misfit0, misfit
+    real :: misfit
     real :: val_misfit
 
     ! search direction computation method in inversion

@@ -15,7 +15,7 @@ exec = $(bindir)/x_select
 all: makedir $(exec)
 
 # options
-flitdir = $(HOME)/src/libflit
+flitdir = $(HOME)/src/flit
 
 include $(flitdir)/src/Makefile.in
 inc = $(base_inc) -I$(flitdir)/lib

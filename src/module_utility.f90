@@ -129,37 +129,46 @@ contains
 
         integer :: i, tmpi, tmpr
         character(len=1) :: nl = char(10)
+        real :: misfit0
+        integer :: m
 
         if (resume_from_iter == 1 .and. iter == 0) then
+
             misfit0 = 0.0
-            ! allocate array for misfit array
+
+            ! Allocate memory for misfit arrays
             call alloc_array(shot_misfit, [1, ns, 0, niter_max])
             call alloc_array(step_misfit, [1, ns])
             call alloc_array(data_misfit, [0, niter_max + 1])
 
-            ! create misfit history ascii file if new inversion
-            open (2, file=tidy(file_datamisfit), status='replace')
-            close (2)
+            ! Create misfit history ascii file if new inversion
+            open (33, file=tidy(file_datamisfit), status='replace')
+            close (33)
+
         end if
 
         if (resume_from_iter > 1 .and. iter == 0) then
-            ! allocate array for misfit array
+
+            ! Allocate memory for misfit arrays
             call alloc_array(shot_misfit, [1, ns, 0, niter_max])
             call alloc_array(step_misfit, [1, ns])
             call alloc_array(data_misfit, [0, niter_max + 1])
 
-            ! read existing misfit history if continued inversion
-            open (2, file=tidy(file_datamisfit), status='old')
+            ! Read existing misfit history if continued inversion
+            open (33, file=tidy(file_datamisfit), status='old')
             do i = 0, resume_from_iter - 1
-                read (2, *) tmpi, data_misfit(i), tmpr
+                read (33, *) tmpi, data_misfit(i), tmpr
             end do
-            close (2)
-            open (3, file=tidy(file_shotmisfit), status='old', access='stream', form='unformatted')
+            close (33)
+
+            open (33, file=tidy(file_shotmisfit), status='old', access='stream', form='unformatted')
             do i = 1, resume_from_iter - 1
-                read (3) shot_misfit(:, i)
+                read (33) shot_misfit(:, i)
             end do
-            close (3)
+            close (33)
+
             misfit0 = data_misfit(0)
+
         end if
 
         ! Only in rank 0
@@ -173,32 +182,42 @@ contains
 
             if (iter == 1 .and. misfit0 == 0) then
                 misfit0 = data_misfit(0)
-                open (2, file=tidy(file_datamisfit), position='append')
-                write (2, '(i4,es18.10,es18.10)') 0, misfit0, 1.0
-                close (2)
+                open (33, file=tidy(file_datamisfit), position='append')
+                write (33, '(i4,es18.7,es18.7)') 0, misfit0, 1.0
+                close (33)
             end if
 
             ! Misfit information
             call warn(date_time_compact()//' >>>>>>>>>> Data misfit: ' &
-                //num2str(data_misfit(iter), '(es18.10)'))
+                //num2str(data_misfit(iter), '(es18.7)'))
             if (data_misfit(0) == 0) then
                 call warn(date_time_compact()//' >>>>>>>>>> Normalized data misfit: ' &
-                    //num2str(0.0, '(es18.10)'))
+                    //num2str(0.0, '(es18.7)'))
                 stop
             else
                 call warn(date_time_compact()//' >>>>>>>>>> Normalized data misfit: ' &
-                    //num2str(data_misfit(iter)/data_misfit(0), '(es18.10)'))
+                    //num2str(data_misfit(iter)/data_misfit(0), '(es18.7)'))
             end if
 
             ! Save misfit history to ASCII file
-            open (2, file=tidy(file_datamisfit), status='old', form='formatted', access='direct', recl=41)
-            write (2, '(i4,es18.10,es18.10,a)', rec=iter + 1) &
+            open (33, file=tidy(file_datamisfit), status='old', form='formatted', access='direct', recl=41)
+            write (33, '(i4,es18.7,es18.7,a)', rec=iter + 1) &
                 iter, &
                 data_misfit(iter), &
                 data_misfit(iter)/data_misfit(0), nl
-            close (2)
+            close (33)
 
-            ! output shot misfit
+            ! For an inversion that resumes from iter > 1, truncate
+            m = count_nonempty_lines(file_datamisfit)
+            if (m > iter + 1) then
+                open (33, file=tidy(file_datamisfit), status='replace')
+                do i = 0, iter
+                    write (33, '(i4,es18.7,es18.7,a)') i, data_misfit(i), data_misfit(i)/data_misfit(0)
+                end do
+                close (33)
+            end if
+
+            ! Output shot misfit
             shot_misfit(:, iter) = step_misfit
             call output_array(shot_misfit(:, 0:iter), tidy(file_shotmisfit))
 
@@ -216,8 +235,8 @@ contains
                 if (yn_flat_stop) then
                     if (rankid == 0) then
                         call warn(' ')
-                        call warn(date_time_compact()//' Inversion has three consecutive data misfits that are same. ')
-                        call warn(date_time_compact()//' Inversion actually stops. Exiting. ')
+                        call warn(date_time_compact()//' The inversion has three successive iterations with identical data misfits. ')
+                        call warn(date_time_compact()//' Inversion has stopped. Exiting. ')
                         call warn(' ')
                     end if
                     call mpibarrier
@@ -238,12 +257,12 @@ contains
 
         if (rankid == 0) then
             if (.not. (data_misfit <= float_huge)) then
-                call warn(date_time_compact()//' Error: Misfit is NaN. Inversion stops.')
+                call warn(date_time_compact()//' Error: Misfit is NaN. Exiting. ')
                 call mpistop
             end if
             call warn(date_time_compact()//' Trial step number: '//num2str(step_number))
-            call warn(date_time_compact()//' Trial step size: '//num2str(step, '(es18.10)'))
-            call warn(date_time_compact()//' Data misfit: '//num2str(data_misfit, '(es18.10)'))
+            call warn(date_time_compact()//' Trial step size: '//num2str(step, '(es18.7)'))
+            call warn(date_time_compact()//' Data misfit: '//num2str(data_misfit, '(es18.7)'))
         end if
 
     end subroutine print_step_info

@@ -2,7 +2,7 @@
 **LATTE: Los Alamos TravelTime package based on Eikonal equation**
 
 `LATTE` is an open-source software for 
-- **Traveltime computation** based on eikonal equation in 2D/3D acoustic/elastic media and based on 
+- **Traveltime computation** based on the factorized eikonal equation in 2D/3D acoustic/elastic media for
     - First-arrival P, S traveltimes
     - Both first-arrival and reflection traveltimes (e.g., P, S, PP, SS, PS, SP) for an arbitrary number of reflectors. 
 - **Adjoint-state first-arrival traveltime tomography** based on first-arrival traveltime in 2D/3D acoustic/elastic media to 

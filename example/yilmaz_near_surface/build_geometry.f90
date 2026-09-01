@@ -10,7 +10,7 @@ program test
     call make_directory('./geometry')
 
     open (3, file='./geometry/geometry.txt')
-    do i = 1, 60
+    do i = 1, 49
         write (3, *) 'shot_'//num2str(i)//'_geometry.txt'
     end do
 

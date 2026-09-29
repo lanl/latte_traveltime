@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -81,9 +81,9 @@ contains
             do j = 1, mx
                 do i = 1, mz
                     if (nint(refl(i, j)) == l) then
-                        sg%srcr(h)%z = (i - 1)*dz
+                        sg%srcr(h)%z = o(2) + (i - 1)*dz
                         sg%srcr(h)%y = 0
-                        sg%srcr(h)%x = (j - 1)*dx
+                        sg%srcr(h)%x = o(1) + (j - 1)*dx
                         sg%srcr(h)%t0 = tt0(i, j)
                         h = h + 1
                     end if
@@ -151,9 +151,9 @@ contains
                 do i = 1, mz
                     if (nint(refl(i, j)) == l) then
                         ! The locations of effective receivers are reflectors
-                        sg%recr(h)%z = (i - 1)*dz
+                        sg%recr(h)%z = o(2) + (i - 1)*dz
                         sg%recr(h)%y = 0
-                        sg%recr(h)%x = (j - 1)*dx
+                        sg%recr(h)%x = o(1) + (j - 1)*dx
                         ! The residual is the value of receiver-side reflection adjoint field
                         tr(h, 1) = ta(i, j)
                         h = h + 1
@@ -282,9 +282,9 @@ contains
             do j = 1, mx
                 do i = 1, mz
                     if (nint(refl(i, j)) == l) then
-                        sg%srcr(h)%z = (i - 1)*dz
+                        sg%srcr(h)%z = o(2) + (i - 1)*dz
                         sg%srcr(h)%y = 0
-                        sg%srcr(h)%x = (j - 1)*dx
+                        sg%srcr(h)%x = o(1) + (j - 1)*dx
                         ! The reflector FAT is with p, not s
                         sg%srcr(h)%t0 = ttp0(i, j)
                         h = h + 1
@@ -363,9 +363,9 @@ contains
                 do i = 1, mz
                     if (nint(refl(i, j)) == l) then
                         ! The locations of effective receivers are reflectors
-                        sg%recr(h)%z = (i - 1)*dz
+                        sg%recr(h)%z = o(2) + (i - 1)*dz
                         sg%recr(h)%y = 0
-                        sg%recr(h)%x = (j - 1)*dx
+                        sg%recr(h)%x = o(1) + (j - 1)*dx
                         ! The residual is the value of receiver-side reflection adjoint field
                         tr(h, 1) = tpa(i, j)
                         h = h + 1

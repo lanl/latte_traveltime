@@ -1,5 +1,5 @@
 !
-! © 2025. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -1108,7 +1108,7 @@ contains
         dz = d(3)
         ox = o(1)
         oy = o(2)
-        oz = o(2)
+        oz = o(3)
 
         tt = permute(t, 321)
         vp = permute(v, 321)

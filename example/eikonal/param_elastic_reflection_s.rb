@@ -15,5 +15,6 @@ file_vp = model/vp.bin
 file_vs = model/vs.bin
 file_refl = model/refl.bin
 dir_synthetic = data_elastic_refl_s
+
 snaps = 0, 1, 1
 dir_snapshot = snapshot_elastic_refl_s

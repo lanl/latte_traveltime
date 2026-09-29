@@ -854,6 +854,328 @@ contains
     end subroutine fast_sweep_adjoint
 
     !
+    !> Background time field of a source of one or many points: at every
+    !> grid point the analytic time from the source point that arrives
+    !> first, t0 = min_l (|x - s_l|/v_l + t0_l), and its derivatives, into
+    !> the module arrays t0, pdxt0, pdyt0, pdzt0.
+    !
+    !> The minimum used to re-interpolate every source point's velocity at
+    !> every grid point and fill four ns-long arrays per grid point:
+    !> nx*ny*nz*ns interpolations, with the source points taken one after
+    !> another. A reflector ensemble (forward_iso_reflection) has tens of
+    !> thousands of them. Now each source point's velocity is interpolated
+    !> once, and an ensemble larger than background_direct is binned in
+    !> space: a bin whose lower bound -- distance to its box over its
+    !> fastest velocity, plus its earliest start time -- is above the best
+    !> time found so far cannot hold the minimum, and is skipped. The
+    !> pruning is exact: the same source point wins, by minloc's rule for
+    !> ties (the lowest index), and its time and derivatives are the same
+    !> expressions, so the field is identical to evaluating every point.
+    !> The loop runs over grid rows in parallel; along a row, each grid
+    !> point starts from its neighbour's winner, which is usually its own.
+    !
+    subroutine background_time(geom, source_inside, nx, ny, nz, ox, oy, oz, dx, dy, dz, vp)
+
+        type(source_receiver_geometry), intent(in) :: geom
+        logical, dimension(:), intent(in) :: source_inside
+        integer, intent(in) :: nx, ny, nz
+        double precision, intent(in) :: ox, oy, oz, dx, dy, dz
+        double precision, dimension(:, :, :), intent(in) :: vp
+
+        ! Up to this many source points, all are evaluated at every grid point
+        integer, parameter :: background_direct = 16
+        double precision, allocatable, dimension(:) :: sx, sy, sz, sv, st, gx, gy, gz
+        double precision, allocatable, dimension(:) :: bxl, bxh, byl, byh, bzl, bzh, bvmax, btmin
+        integer, allocatable, dimension(:) :: member, bin_of, bin_count, bin_start, order, bfirst, blast
+        integer :: ns, nb, nbin, nbx, nby, nbz, npos, i, j, k, l, m, b, h, win, prev, first
+        double precision :: ex, ey, ez, cell, best, tval, lb, lbmin, tol
+
+        t0 = zeros(nx, ny, nz) + huge_value
+        pdxt0 = zeros(nx, ny, nz)
+        pdyt0 = zeros(nx, ny, nz)
+        pdzt0 = zeros(nx, ny, nz)
+
+        ! The source points that take part, in index order, with what the
+        ! minimum needs of each
+        ns = count(source_inside)
+        if (ns == 0) then
+            return
+        end if
+        member = pack([(l, l = 1, geom%ns)], source_inside)
+        allocate (sx(1:ns), sy(1:ns), sz(1:ns), sv(1:ns), st(1:ns))
+        !$omp parallel do private(m, l)
+        do m = 1, ns
+            l = member(m)
+            sx(m) = geom%srcr(l)%x
+            sy(m) = geom%srcr(l)%y
+            sz(m) = geom%srcr(l)%z
+            ! Linear interpolation to get velocity at the source position
+            sv(m) = get_point_value_inside(dble([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z]), &
+                [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)
+            st(m) = geom%srcr(l)%t0
+            !                ! In comparison, the nearest grid point apporach
+            !                isx = nint((geom%srcr(l)%x - ox)/dx) + 1
+            !                isy = nint((geom%srcr(l)%y - oy)/dy) + 1
+            !                isz = nint((geom%srcr(l)%z - oz)/dz) + 1
+            !                vsource = vp(isx, isy, isz)
+            !                dsx = (i - isx)*dx
+            !                dsy = (j - isy)*dy
+            !                dsz = (k - isz)*dz
+        end do
+        !$omp end parallel do
+
+        allocate (gx(1:nx), gy(1:ny), gz(1:nz))
+        do i = 1, nx
+            gx(i) = ox + (i - 1)*dx
+        end do
+        do j = 1, ny
+            gy(j) = oy + (j - 1)*dy
+        end do
+        do k = 1, nz
+            gz(k) = oz + (k - 1)*dz
+        end do
+
+        if (ns <= background_direct) then
+
+            !$omp parallel do collapse(2) private(i, j, k, m, best, win, tval)
+            do k = 1, nz
+                do j = 1, ny
+                    do i = 1, nx
+                        best = huge_value
+                        win = 0
+                        do m = 1, ns
+                            tval = source_time(m, i, j, k)
+                            if (tval < best) then
+                                best = tval
+                                win = m
+                            end if
+                        end do
+                        call set_background(win, i, j, k)
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+            return
+
+        end if
+
+        ! Bins: a uniform grid over the box of the source points, about
+        ! 2*sqrt(ns) cells -- per grid point, one bound per non-empty bin
+        ! plus the points of the few bins the bound does not rule out
+        ex = maxval(sx) - minval(sx)
+        ey = maxval(sy) - minval(sy)
+        ez = maxval(sz) - minval(sz)
+        npos = count([ex, ey, ez] > 0)
+        nbx = 1
+        nby = 1
+        nbz = 1
+        if (npos > 0) then
+            cell = (product(pack([ex, ey, ez], [ex, ey, ez] > 0))/(2.0d0*sqrt(dble(ns))))**(1.0d0/npos)
+            if (ex > 0) nbx = max(1, min(ns, ceiling(ex/cell)))
+            if (ey > 0) nby = max(1, min(ns, ceiling(ey/cell)))
+            if (ez > 0) nbz = max(1, min(ns, ceiling(ez/cell)))
+        end if
+        nbin = nbx*nby*nbz
+        allocate (bin_of(1:ns))
+        do m = 1, ns
+            bin_of(m) = bin_index(sx(m), minval(sx), ex, nbx) &
+                + nbx*(bin_index(sy(m), minval(sy), ey, nby) - 1) &
+                + nbx*nby*(bin_index(sz(m), minval(sz), ez, nbz) - 1)
+        end do
+
+        ! A counting sort by bin, stable, so each bin lists its points in
+        ! index order
+        allocate (bin_count(1:nbin), bin_start(1:nbin + 1))
+        bin_count = 0
+        do m = 1, ns
+            bin_count(bin_of(m)) = bin_count(bin_of(m)) + 1
+        end do
+        bin_start(1) = 1
+        do b = 1, nbin
+            bin_start(b + 1) = bin_start(b) + bin_count(b)
+        end do
+        allocate (order(1:ns))
+        bin_count = 0
+        do m = 1, ns
+            b = bin_of(m)
+            order(bin_start(b) + bin_count(b)) = m
+            bin_count(b) = bin_count(b) + 1
+        end do
+
+        ! The non-empty bins: their members, tight box, fastest velocity
+        ! and earliest start time
+        nb = count(bin_count > 0)
+        allocate (bfirst(1:nb), blast(1:nb), bxl(1:nb), bxh(1:nb), byl(1:nb), byh(1:nb), &
+            bzl(1:nb), bzh(1:nb), bvmax(1:nb), btmin(1:nb))
+        h = 0
+        do b = 1, nbin
+            if (bin_count(b) == 0) then
+                cycle
+            end if
+            h = h + 1
+            bfirst(h) = bin_start(b)
+            blast(h) = bin_start(b + 1) - 1
+            associate (mm => order(bin_start(b):bin_start(b + 1) - 1))
+                bxl(h) = minval(sx(mm))
+                bxh(h) = maxval(sx(mm))
+                byl(h) = minval(sy(mm))
+                byh(h) = maxval(sy(mm))
+                bzl(h) = minval(sz(mm))
+                bzh(h) = maxval(sz(mm))
+                bvmax(h) = maxval(sv(mm))
+                btmin(h) = minval(st(mm))
+            end associate
+        end do
+
+        !$omp parallel do collapse(2) schedule(dynamic) &
+            !$omp private(i, j, k, m, b, h, best, win, prev, first, tval, lb, lbmin, tol)
+        do k = 1, nz
+            do j = 1, ny
+                prev = 0
+                do i = 1, nx
+
+                    best = huge_value
+                    win = 0
+                    if (prev > 0) then
+                        ! the neighbour's winner, which is usually this
+                        ! point's as well: a tight bound from the start
+                        best = source_time(prev, i, j, k)
+                        win = prev
+                    else
+                        ! otherwise the bin with the lowest bound goes first
+                        lbmin = huge_value
+                        first = 1
+                        do b = 1, nb
+                            lb = bin_bound(b, i, j, k)
+                            if (lb < lbmin) then
+                                lbmin = lb
+                                first = b
+                            end if
+                        end do
+                        do h = bfirst(first), blast(first)
+                            m = order(h)
+                            tval = source_time(m, i, j, k)
+                            if (tval < best .or. (tval == best .and. m < win)) then
+                                best = tval
+                                win = m
+                            end if
+                        end do
+                    end if
+
+                    ! Every bin that could hold a time at or below the best
+                    ! so far; the margin keeps rounding in the bound from
+                    ! ever ruling out the true minimum
+                    tol = 1.0d-12*abs(best)
+                    do b = 1, nb
+                        if (bin_bound(b, i, j, k) > best + tol) then
+                            cycle
+                        end if
+                        do h = bfirst(b), blast(b)
+                            m = order(h)
+                            tval = source_time(m, i, j, k)
+                            if (tval < best .or. (tval == best .and. m < win)) then
+                                best = tval
+                                win = m
+                                tol = 1.0d-12*abs(best)
+                            end if
+                        end do
+                    end do
+
+                    call set_background(win, i, j, k)
+                    prev = win
+
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    contains
+
+        ! The loop indices come in as arguments: inside a parallel loop a
+        ! contained procedure would see the original i, j, k through host
+        ! association, not the thread's private copies
+
+        !> The time from source point m to grid point (i, j, k), as the
+        !> original loop computed it
+        double precision function source_time(m, i, j, k)
+            integer, intent(in) :: m, i, j, k
+            double precision :: dsx, dsy, dsz
+            dsx = gx(i) - sx(m)
+            dsy = gy(j) - sy(m)
+            dsz = gz(k) - sz(m)
+            source_time = sqrt(dsx**2 + dsy**2 + dsz**2)/sv(m)
+            source_time = source_time + st(m)
+        end function source_time
+
+        !> A lower bound of the time from any source point of bin b
+        double precision function bin_bound(b, i, j, k)
+            integer, intent(in) :: b, i, j, k
+            double precision :: cx, cy, cz
+            cx = max(bxl(b) - gx(i), 0.0d0, gx(i) - bxh(b))
+            cy = max(byl(b) - gy(j), 0.0d0, gy(j) - byh(b))
+            cz = max(bzl(b) - gz(k), 0.0d0, gz(k) - bzh(b))
+            bin_bound = sqrt(cx**2 + cy**2 + cz**2)/bvmax(b) + btmin(b)
+        end function bin_bound
+
+        !> The winner's time and derivatives at (i, j, k), as the original
+        !> loop computed them
+        subroutine set_background(m, i, j, k)
+            integer, intent(in) :: m, i, j, k
+            double precision :: dsx, dsy, dsz, t1
+            if (m == 0) then
+                return
+            end if
+            dsx = gx(i) - sx(m)
+            dsy = gy(j) - sy(m)
+            dsz = gz(k) - sz(m)
+            t1 = sqrt(dsx**2 + dsy**2 + dsz**2)/sv(m)
+            if (t1 == 0) then
+                pdxt0(i, j, k) = 0
+                pdyt0(i, j, k) = 0
+                pdzt0(i, j, k) = 0
+            else
+                pdxt0(i, j, k) = dsx/sv(m)**2/t1
+                pdyt0(i, j, k) = dsy/sv(m)**2/t1
+                pdzt0(i, j, k) = dsz/sv(m)**2/t1
+            end if
+            t0(i, j, k) = t1 + st(m)
+        end subroutine set_background
+
+    end subroutine background_time
+
+    !
+    !> Which of n bins a coordinate falls in, over [low, low + extent]
+    !
+    pure integer function bin_index(x, low, extent, n)
+        double precision, intent(in) :: x, low, extent
+        integer, intent(in) :: n
+        if (extent > 0 .and. n > 1) then
+            bin_index = min(n, int((x - low)/extent*n) + 1)
+        else
+            bin_index = 1
+        end if
+    end function bin_index
+
+    !
+    !> A point's grid cell as one integer: the floor and ceiling indices of
+    !> each coordinate, exactly what within_the_same_grid compares
+    !
+    function cell_key(p, n, o, d) result(key)
+        double precision, dimension(:), intent(in) :: p, o, d
+        integer, dimension(:), intent(in) :: n
+        integer(kind=8) :: key
+        integer(kind=8) :: c1, c2, c3
+        double precision :: p1, p2, p3
+        p1 = p(1) - o(1)
+        p2 = p(2) - o(2)
+        p3 = p(3) - o(3)
+        c1 = 2*int(floor(p1/d(1)), 8) + (ceiling(p1/d(1)) - floor(p1/d(1))) + 4
+        c2 = 2*int(floor(p2/d(2)), 8) + (ceiling(p2/d(2)) - floor(p2/d(2))) + 4
+        c3 = 2*int(floor(p3/d(3)), 8) + (ceiling(p3/d(3)) - floor(p3/d(3))) + 4
+        key = c1 + (2*int(n(1), 8) + 8)*(c2 + (2*int(n(2), 8) + 8)*c3)
+    end function cell_key
+
+    !
     !> Fast sweeping factorized eikonal solver
     !
     subroutine forward_iso(v, d, o, geom, t, trec)
@@ -866,10 +1188,11 @@ contains
 
         double precision, allocatable, dimension(:, :, :) :: tt, tt_prev, vp
         double precision :: dx, dy, dz, ox, oy, oz
-        integer :: nx, ny, nz, niter, i, j, k, l, isx, isy, isz, irx, iry, irz, itx, ity, itz
-        double precision, allocatable, dimension(:) :: t1, t2, t3, t4
+        integer :: nx, ny, nz, niter, i, l, isx, isy, isz, irx, iry, irz, itx, ity, itz
         double precision :: ttdiff, vsource, dsx, dsy, dsz
-        integer :: imin, sw
+        integer :: sw
+        integer(kind=8) :: key
+        integer(kind=8), allocatable, dimension(:) :: cellkey
         logical, allocatable, dimension(:) :: source_inside, receiver_inside
         double precision :: time1, time2
 
@@ -907,71 +1230,9 @@ contains
         end do
         !$omp end parallel do
 
-        t0 = zeros(nx, ny, nz)
-        pdxt0 = zeros(nx, ny, nz)
-        pdyt0 = zeros(nx, ny, nz)
-        pdzt0 = zeros(nx, ny, nz)
-
-        ! Source location
-        t1 = zeros(geom%ns) + huge_value
-        t2 = zeros_like(t1)
-        t3 = zeros_like(t1)
-        t4 = zeros_like(t1)
-
-        ! Background time field
-        !$omp parallel do private(i, j, k, l, isx, isy, isz, vsource, dsx, dsy, dsz, imin, t1, t2, t3, t4)
-        do k = 1, nz
-            do j = 1, ny
-                do i = 1, nx
-
-                    do l = 1, geom%ns
-
-                        if (source_inside(l)) then
-
-                            ! Linear interpolation to get velocity at the source position
-                            vsource = get_point_value_inside(dble([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z]), &
-                                [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)
-
-                            dsx = ox + (i - 1)*dx - geom%srcr(l)%x
-                            dsy = oy + (j - 1)*dy - geom%srcr(l)%y
-                            dsz = oz + (k - 1)*dz - geom%srcr(l)%z
-
-                            !                            ! In comparison, the nearest grid point apporach
-                            !                            isx = nint((geom%srcr(l)%x - ox)/dx) + 1
-                            !                            isy = nint((geom%srcr(l)%y - oy)/dy) + 1
-                            !                            isz = nint((geom%srcr(l)%z - oz)/dz) + 1
-                            !                            vsource = vp(isx, isy, isz)
-                            !                            dsx = (i - isx)*dx
-                            !                            dsy = (j - isy)*dy
-                            !                            dsz = (k - isz)*dz
-
-                            t1(l) = sqrt(dsx**2 + dsy**2 + dsz**2)/vsource
-                            if (t1(l) == 0) then
-                                t2(l) = 0
-                                t3(l) = 0
-                                t4(l) = 0
-                            else
-                                t2(l) = dsx/vsource**2/t1(l)
-                                t3(l) = dsy/vsource**2/t1(l)
-                                t4(l) = dsz/vsource**2/t1(l)
-                            end if
-
-                            t1(l) = t1(l) + geom%srcr(l)%t0
-
-                        end if
-
-                    end do
-
-                    imin = as_scalar(minloc(t1))
-                    t0(i, j, k) = t1(imin)
-                    pdxt0(i, j, k) = t2(imin)
-                    pdyt0(i, j, k) = t3(imin)
-                    pdzt0(i, j, k) = t4(imin)
-
-                end do
-            end do
-        end do
-        !$omp end parallel do
+        ! Background time field: the analytic time from the source point
+        ! that arrives first, and its derivatives
+        call background_time(geom, source_inside, nx, ny, nz, ox, oy, oz, dx, dy, dz, vp)
 
         ! Initialize the multiplicative time field
         tt_prev = zeros(nx, ny, nz)
@@ -1045,7 +1306,22 @@ contains
 
         ! Get the traveltime values at the receivers, if necessary
         trec = zeros(geom%nr, 1)
-        !$omp parallel do private(i, irx, iry, irz, l, vsource, dsx, dsy, dsz)
+        ! A receiver in the same grid cell as a source point takes the
+        ! analytic time from it -- from the last such source point, as the
+        ! pairwise test within_the_same_grid always did. That test ran for
+        ! every receiver against every source point; each source point's
+        ! cell is now one integer (cell_key), computed once.
+        allocate (cellkey(1:geom%ns))
+        cellkey = -1
+        !$omp parallel do private(l)
+        do l = 1, geom%ns
+            if (source_inside(l)) then
+                cellkey(l) = cell_key(dble([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z]), &
+                    [nx, ny, nz], [ox, oy, oz], [dx, dy, dz])
+            end if
+        end do
+        !$omp end parallel do
+        !$omp parallel do private(i, irx, iry, irz, l, key, vsource, dsx, dsy, dsz)
         do i = 1, geom%nr
             if (receiver_inside(i)) then
 
@@ -1054,17 +1330,17 @@ contains
                 ! a receiver falling on integer grid points.
                 trec(i, 1) = get_point_value_inside(dble([geom%recr(i)%x, geom%recr(i)%y, geom%recr(i)%z]), &
                     [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], tt)
-                do l = 1, geom%ns
-                    if (source_inside(l)) then
-                        if (within_the_same_grid(dble([geom%recr(i)%x, geom%recr(i)%y, geom%recr(i)%z]), &
-                                dble([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z]), [ox, oy, oz], [dx, dy, dz])) then
-                            vsource = get_point_value_inside(dble([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z]), &
-                                [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)
-                            dsx = geom%recr(i)%x - geom%srcr(l)%x
-                            dsy = geom%recr(i)%y - geom%srcr(l)%y
-                            dsz = geom%recr(i)%z - geom%srcr(l)%z
-                            trec(i, 1) = sqrt(dsx**2 + dsy**2 + dsz**2)/vsource + geom%srcr(l)%t0
-                        end if
+                key = cell_key(dble([geom%recr(i)%x, geom%recr(i)%y, geom%recr(i)%z]), &
+                    [nx, ny, nz], [ox, oy, oz], [dx, dy, dz])
+                do l = geom%ns, 1, -1
+                    if (cellkey(l) == key) then
+                        vsource = get_point_value_inside(dble([geom%srcr(l)%x, geom%srcr(l)%y, geom%srcr(l)%z]), &
+                            [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)
+                        dsx = geom%recr(i)%x - geom%srcr(l)%x
+                        dsy = geom%recr(i)%y - geom%srcr(l)%y
+                        dsz = geom%recr(i)%z - geom%srcr(l)%z
+                        trec(i, 1) = sqrt(dsx**2 + dsy**2 + dsz**2)/vsource + geom%srcr(l)%t0
+                        exit
                     end if
                 end do
 

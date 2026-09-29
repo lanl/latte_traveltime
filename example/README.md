@@ -5,6 +5,7 @@ The directory contains scripts for building and running several validation examp
 
 - `eikonal`: Showcasing 2D eikonal equation solving in acoustic and elastic media, for first-arrival and reflection settings. The results are shown in Figures A1-A4 of [the LATTE paper](https://doi.org/10.1093/gji/ggaf079). 
 - `eikonal_interpolation`: Comparing linear interpolation used in `LATTE` with conventional nearest-grid interpolation; note that in the code, the nearest-grid interpolation has been disabled, and by default `LATTE` uses linear interpolation. The results are shown in Figures 3 and 4 of [the LATTE paper](https://doi.org/10.1093/gji/ggaf079). 
+- `eikonal_multi_source`: Showcasing 2D and 3D eikonal equation solving for a source made of many points, each with its own start time: two point sources, and a rupturing fault represented by point sources along a line (2D) or over a plane (3D). The Python scripts `multi_source_2d.py` and `multi_source_3d.py` build the models and geometries, run `LATTE`, and plot the results; they need `numpy` and `matplotlib`. 
 - `fatt`: An example for validating 2D FATT functionality of `LATTE`. The results are shown in Figures 6-9 of [the LATTE paper](https://doi.org/10.1093/gji/ggaf079). 
 - `fatt_benchmark`: A benchmark for validating that `LATTE`'s 2D FATT can generate medium parameter gradients with correct signs. The results are shown in Figure 5 of [the LATTE paper](https://doi.org/10.1093/gji/ggaf079). 
 - `fatt_3d`: An example for validating 3D FATT functionality of `LATTE`. 

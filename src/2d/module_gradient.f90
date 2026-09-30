@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -219,13 +219,11 @@ contains
         character(len=*), intent(in) :: name
 
         integer :: i, j
-        character(len=1024) :: shot_prefix, dir_mask, file_mask
+        character(len=1024) :: dir_mask, file_mask
         real :: shot_w_movingbalx, shot_w_movingbalz
         real :: shot_w_medianfiltx, shot_w_medianfiltz
         real, allocatable, dimension(:) :: shot_w_taperx, shot_w_taperz
         real :: shot_w_smoothx, shot_w_smoothz
-        real :: shot_w_adpmutex, shot_w_adpmutez
-        real :: recmin, recmax, srcmin, srcmax
         integer :: lb, ub, px, l
         real, allocatable, dimension(:, :) :: w_mask
         real, allocatable, dimension(:) :: st, tp
@@ -233,8 +231,11 @@ contains
         real :: conemutex, conemutez, conemutepower, conemutetaper
         real :: srcx, srcz, depth
         character(len=32), allocatable, dimension(:) :: process_shot_grad_w
+        integer, dimension(1:4) :: ntaper
 
         call readpar_nstring(file_parameter, 'process_shot_'//tidy(name), process_shot_grad_w, [''])
+
+        ws = return_normal(ws)
 
         do i = 1, size(process_shot_grad_w)
 
@@ -247,13 +248,15 @@ contains
                     ws = gauss_filt(ws, [shot_w_smoothz/dz, shot_w_smoothx/dx])
 
                 case ('maxbal')
-                    if (maxval(ws) /= 0) then
-                        ws = ws/maxval(ws)
+                    if (maxval(abs(ws)) /= 0) then
+                        ws = ws/maxval(abs(ws))
                     end if
 
                 case ('rmsbal')
                     ! Normalize with shot image energy
-                    ws = ws/mean(ws, 2)
+                    if (mean(ws, 2) /= 0) then
+                        ws = ws/mean(ws, 2)
+                    end if
 
                 case ('movingbal')
                     ! Moving balance
@@ -323,45 +326,16 @@ contains
                     if (dir_mask == '') then
                         call readpar_string(file_parameter, 'shot_'//tidy(name)//'_mask', file_mask, '')
                     else
-                        file_mask = tidy(dir_mask)//'/'//tidy(shot_prefix)//'_mask.bin'
+                        file_mask = tidy(dir_mask)//'/shot_'//num2str(gmtr(ishot)%id)//'_mask.bin'
                     end if
-                    call prepare_model_single_parameter(w_mask, 'mask', file_mask, update=.false.)
+                    if (file_mask /= '') then
+                        call prepare_model_single_parameter(w_mask, 'mask', file_mask, update=.false.)
+                    else
+                        w_mask = ones(nz, nx)
+                    end if 
                     call alloc_array(w_mask, [1, shot_nz, 1, shot_nx], &
                         source=w_mask(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend))
                     ws = ws*w_mask
-
-                case ('adpmute')
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_adpmutex', shot_w_adpmutex, -1.0)
-                    call readpar_float(file_parameter, 'shot_'//tidy(name)//'_adpmutez', shot_w_adpmutez, -1.0)
-                    if (shot_w_adpmutex >= 0) then
-                        ! find source-receiver widest possible range
-                        recmin = minval(gmtr(ishot)%recr(:)%x - shot_xbeg)
-                        recmax = maxval(gmtr(ishot)%recr(:)%x - shot_xbeg)
-                        srcmin = minval(gmtr(ishot)%srcr(:)%x - shot_xbeg)
-                        srcmax = maxval(gmtr(ishot)%srcr(:)%x - shot_xbeg)
-                        ! ... and their integer grid point positions in the computed image
-                        lb = nint(min(recmin, srcmin)/dx + 1)
-                        ub = nint(max(recmax, srcmax)/dx + 1)
-                        ! the taper length
-                        px = nint(shot_w_adpmutex/dx)
-                        ! create the taper
-                        call alloc_array(st, [lb, ub], pad=px)
-                        st = 1.0
-                        st = taper(st, [px, px], ['blackman', 'blackman'])
-                        ! put the taper in the whole x range, which can be longer than the taper
-                        call alloc_array(tp, [1, shot_nx])
-                        do l = lb - px, ub + px
-                            if (l >= 1 .and. l <= shot_nx) then
-                                tp(l) = st(l)
-                            end if
-                        end do
-                        ! now the taper has the same length with the image, and do the tapering
-                        ! the resulting tapered image is now restricted to the region cropped by
-                        ! the largest possible source-receiver offset
-                        do l = 1, shot_nz
-                            ws(l, :) = ws(l, :)*tp
-                        end do
-                    end if
 
                 case ('conemute')
                     call readpar_float(file_parameter, 'shot_'//tidy(name)//'_conemutex', conemutex, -1.0)
@@ -417,6 +391,20 @@ contains
             end if
 
         end do
+
+        ! Taper the sides of the shot range that lie inside the model, so that
+        ! the merged gradient has no sharp edges along the adaptive range;
+        ! an axis without adaptive range is never tapered
+        if (name /= 'refl') then
+            ntaper = [ &
+                merge(min(nint(adptaperz/dz), shot_nz/2), 0, yn_adpz .and. shot_nzbeg > 1), &
+                merge(min(nint(adptaperz/dz), shot_nz/2), 0, yn_adpz .and. shot_nzend < nz), &
+                merge(min(nint(adptaperx/dx), shot_nx/2), 0, yn_adpx .and. shot_nxbeg > 1), &
+                merge(min(nint(adptaperx/dx), shot_nx/2), 0, yn_adpx .and. shot_nxend < nx)]
+            if (any(ntaper > 0)) then
+                ws = taper(ws, ntaper, ['blackman', 'blackman', 'blackman', 'blackman'])
+            end if
+        end if
 
         ! Merge w
         w(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend) = w(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend) + ws
@@ -486,8 +474,8 @@ contains
                     w = sign(1.0, w)*(abs(w))**w_signed_power
 
                 case ('maxbal')
-                    if (maxval(w) /= 0) then
-                        w = w/maxval(w)
+                    if (maxval(abs(w)) /= 0) then
+                        w = w/maxval(abs(w))
                     end if
 
                 case ('rmsbal')
@@ -579,8 +567,12 @@ contains
                     w = median_filt(w, nint([w_medianfiltz/dz, w_medianfiltx/dx]))
 
                 case ('mask')
-                    call readpar_xstring(file_parameter, tidy(name)//'_mask', file_mask, file_mask, iter*1.0)
-                    call prepare_model_single_parameter(w_mask, 'mask', file_mask, update=.false.)
+                    call readpar_xstring(file_parameter, tidy(name)//'_mask', file_mask, '', iter*1.0)
+                    if (file_mask /= '') then
+                        call prepare_model_single_parameter(w_mask, 'mask', file_mask, update=.false.)
+                    else
+                        w_mask = ones_like(w)
+                    end if 
                     w = w*w_mask
 
             end select

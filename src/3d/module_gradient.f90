@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -232,7 +232,7 @@ contains
         character(len=*), intent(in) :: name
 
         integer :: i, j, k
-        character(len=1024) :: shot_prefix, dir_mask
+        character(len=1024) :: dir_mask
         real :: shot_w_movingbalx, shot_w_movingbaly, shot_w_movingbalz
         real, allocatable, dimension(:) :: shot_w_taperx, shot_w_tapery, shot_w_taperz
         real :: shot_w_medianfiltx, shot_w_medianfilty, shot_w_medianfiltz
@@ -247,8 +247,11 @@ contains
         real :: srcx, srcy, srcz, depth, ds, dist
         integer :: pr, pt, ix, iy
         character(len=1024) :: file_mask
+        integer, dimension(1:6) :: ntaper
 
         call readpar_nstring(file_parameter, 'process_shot_'//tidy(name)//'', process_shot_grad_w, [''])
+
+        ws = return_normal(ws)
 
         do i = 1, size(process_shot_grad_w)
 
@@ -262,13 +265,15 @@ contains
                     ws = gauss_filt(ws, [shot_w_smoothz/dz, shot_w_smoothy/dy, shot_w_smoothx/dx])
 
                 case ('maxbal')
-                    if (maxval(ws) /= 0) then
-                        ws = ws/maxval(ws)
+                    if (maxval(abs(ws)) /= 0) then
+                        ws = ws/maxval(abs(ws))
                     end if
 
                 case ('rmsbal')
                     ! Normalize with shot image energy
-                    ws = ws/mean(ws, 2)
+                    if (mean(ws, 2) /= 0) then
+                        ws = ws/mean(ws, 2)
+                    end if
 
                 case ('movingbal')
                     ! Moving balance
@@ -357,9 +362,13 @@ contains
                     if (dir_mask == '') then
                         call readpar_string(file_parameter, 'shot_'//tidy(name)//'_mask', file_mask, '')
                     else
-                        file_mask = tidy(dir_mask)//'/'//tidy(shot_prefix)//'_mask.bin'
+                        file_mask = tidy(dir_mask)//'/shot_'//num2str(gmtr(ishot)%id)//'_mask.bin'
                     end if
-                    call prepare_model_single_parameter(w_mask, 'mask', file_mask, update=.false.)
+                    if (file_mask /= '') then
+                        call prepare_model_single_parameter(w_mask, 'mask', file_mask, update=.false.)
+                    else
+                        w_mask = ones(nz, ny, nx)
+                    end if
                     call alloc_array(w_mask, [1, shot_nz, 1, shot_ny, 1, shot_nx], &
                         source=w_mask(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend))
                     ws = ws*w_mask
@@ -453,6 +462,22 @@ contains
             end if
 
         end do
+
+        ! Taper the sides of the shot range that lie inside the model, so that
+        ! the merged gradient has no sharp edges along the adaptive range;
+        ! an axis without adaptive range is never tapered
+        if (name /= 'refl') then
+            ntaper = [ &
+                merge(min(nint(adptaperz/dz), shot_nz/2), 0, yn_adpz .and. shot_nzbeg > 1), &
+                merge(min(nint(adptaperz/dz), shot_nz/2), 0, yn_adpz .and. shot_nzend < nz), &
+                merge(min(nint(adptapery/dy), shot_ny/2), 0, yn_adpy .and. shot_nybeg > 1), &
+                merge(min(nint(adptapery/dy), shot_ny/2), 0, yn_adpy .and. shot_nyend < ny), &
+                merge(min(nint(adptaperx/dx), shot_nx/2), 0, yn_adpx .and. shot_nxbeg > 1), &
+                merge(min(nint(adptaperx/dx), shot_nx/2), 0, yn_adpx .and. shot_nxend < nx)]
+            if (any(ntaper > 0)) then
+                ws = taper(ws, ntaper, ['blackman', 'blackman', 'blackman', 'blackman', 'blackman', 'blackman'])
+            end if
+        end if
 
         ! Merge image
         w(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend) = w(shot_nzbeg:shot_nzend, shot_nybeg:shot_nyend, shot_nxbeg:shot_nxend) + ws
@@ -583,6 +608,11 @@ contains
                     call readpar_xfloat(file_parameter, tidy(name)//'_medianfiltz', w_medianfiltz, dz, iter*1.0)
                     w = median_filt(w, nint([w_medianfiltz/dz, w_medianfilty/dy, w_medianfiltx/dx]))
 
+                case ('maxbal')
+                    if (maxval(abs(w)) /= 0) then
+                        w = w/maxval(abs(w))
+                    end if
+
                 case ('rmsbal')
                     if (mean(w, 2) /= 0) then
                         w = w/mean(w, 2)
@@ -656,8 +686,12 @@ contains
                     w = return_normal(w)
 
                 case ('mask')
-                    call readpar_xstring(file_parameter, tidy(name)//'_mask', file_mask, file_mask, iter*1.0)
-                    call prepare_model_single_parameter(w_mask, 'mask', file_mask, update=.false.)
+                    call readpar_xstring(file_parameter, tidy(name)//'_mask', file_mask, '', iter*1.0)
+                    if (file_mask /= '') then
+                        call prepare_model_single_parameter(w_mask, 'mask', file_mask, update=.false.)
+                    else
+                        w_mask = ones_like(w)
+                    end if
                     w = w*w_mask
 
             end select

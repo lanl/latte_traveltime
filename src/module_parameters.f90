@@ -44,14 +44,8 @@ module parameters
     ! snapshot times
     real, allocatable, dimension(:) :: snaps
 
-    ! space taper when adaptive range required
-    integer :: space_taperx = 10
-    integer :: space_tapery = 10
-    integer :: space_taperz = 10
-
     ! shot index and division related
     integer, allocatable, dimension(:, :) :: shot_in_rank
-    character(len=1024) :: shot_prefix
     integer :: ishot
     integer, allocatable, dimension(:) :: shot_index, rec_index
     integer, allocatable, dimension(:) :: src_exclude, sid_exclude, rec_exclude
@@ -136,6 +130,11 @@ module parameters
     real :: adpextrax = 0.0
     real :: adpextray = 0.0
     real :: adpextraz = 0.0
+
+    ! taper lengths at the sides of an adaptive range that lie inside the model
+    real :: adptaperx = 0.0
+    real :: adptapery = 0.0
+    real :: adptaperz = 0.0
 
     integer, allocatable, dimension(:) :: sid_select, src_select
 
@@ -370,9 +369,9 @@ contains
         call readpar_float(file_parameter, 'adp_extrax', adpextrax, 0.0)
         call readpar_float(file_parameter, 'adp_extray', adpextray, 0.0)
         call readpar_float(file_parameter, 'adp_extraz', adpextraz, 0.0)
-        call readpar_int(file_parameter, 'adp_taperx', space_taperx, 0)
-        call readpar_int(file_parameter, 'adp_tapery', space_tapery, 0)
-        call readpar_int(file_parameter, 'adp_taperz', space_taperz, 0)
+        call readpar_float(file_parameter, 'adp_taperx', adptaperx, 0.0)
+        call readpar_float(file_parameter, 'adp_tapery', adptapery, 0.0)
+        call readpar_float(file_parameter, 'adp_taperz', adptaperz, 0.0)
 
         call readpar_string(file_parameter, 'step_size_method', step_size_method, 'linear')
         call readpar_logical(file_parameter, 'yn_precond', yn_precond, .true.)
@@ -400,6 +399,7 @@ contains
 
         call readpar_nstring(file_parameter, 'process_record', record_processing, [''])
         call readpar_nstring(file_parameter, 'process_synthetic', synthetic_processing, [''])
+        call readpar_logical(file_parameter, 'uniform_processing', uniform_processing, .true.)
         call readpar_logical(file_parameter, 'yn_flat_stop', yn_flat_stop, .false.)
 
         if (which_program == 'eikonal') then

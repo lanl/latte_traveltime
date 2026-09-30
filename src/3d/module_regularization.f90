@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -229,6 +229,7 @@ contains
                     call readpar_xfloat(file_parameter, 'reg_andf_sigma', param%sigma, 10.0, iter*1.0)
                     call readpar_xfloat(file_parameter, 'reg_andf_powerm', param%powerm, 4.0, iter*1.0)
                     call readpar_xstring(file_parameter, 'reg_andf_aux', file_aux, '', iter*1.0)
+                    call readpar_xstring(file_parameter, 'reg_andf_coh', file_coh, '', iter*1.0)
                     if (file_aux /= '' .and. file_coh == '') then
                         maux = load(file_aux, n1, n2, n3)
                         mt = andf_filt_mpi(mt, param, aux=maux)
@@ -510,7 +511,7 @@ contains
                                     sp = ic
                                 end if
                             end do
-                            if (d <= ml_max_dist) then
+                            if (sqrt(d) <= ml_max_dist) then
                                 sxr(l, 1, 1) = fx(sp)
                                 syr(l, 1, 1) = fy(sp)
                                 szr(l, 1, 1) = fz(sp)

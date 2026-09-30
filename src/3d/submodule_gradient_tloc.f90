@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -239,7 +239,7 @@ contains
                             if (uniform_processing) then
                                 call process_model_single_shot(ishot, model_grad(i)%array, lam, 'grad')
                             else
-                                call process_model_single_shot(ishot, model_grad(i)%array, lam, 'grad_'//model_name(1))
+                                call process_model_single_shot(ishot, model_grad(i)%array, lam, 'grad_'//model_name(i))
                             end if
 
                             ! Update source parameters
@@ -751,7 +751,7 @@ contains
                             if (uniform_processing) then
                                 call process_model_single_shot(ishot, model_grad(i)%array, lam, 'grad')
                             else
-                                call process_model_single_shot(ishot, model_grad(i)%array, lam, 'grad_'//model_name(1))
+                                call process_model_single_shot(ishot, model_grad(i)%array, lam, 'grad_'//model_name(i))
                             end if
 
                             ! Update source parameters

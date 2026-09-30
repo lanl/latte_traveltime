@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -272,7 +272,8 @@ contains
                     r = 0
                 end where
 
-                if (vpvsratio_smoothx /= 0 .or. vpvsratio_smoothz /= 0) then
+                if (vpvsratio_smoothx /= 0 .or. &
+                    vpvsratio_smoothy /= 0 .or. vpvsratio_smoothz /= 0) then
                     r = gauss_filt(r, [vpvsratio_smoothz/dz, vpvsratio_smoothy/dy, vpvsratio_smoothx/dx])
                 end if
                 r = clip(r, min_vpvsratio, max_vpvsratio)
@@ -305,7 +306,8 @@ contains
                     r = 0
                 end where
 
-                if (vpvsratio_smoothx /= 0 .or. vpvsratio_smoothz /= 0) then
+                if (vpvsratio_smoothx /= 0 .or. &
+                    vpvsratio_smoothy /= 0 .or. vpvsratio_smoothz /= 0) then
                     r = gauss_filt(r, [vpvsratio_smoothz/dz, vpvsratio_smoothy/dy, vpvsratio_smoothx/dx])
                 end if
                 r = clip(r, min_vpvsratio, max_vpvsratio)

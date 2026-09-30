@@ -391,7 +391,7 @@ contains
         call readpar_string(file_parameter, 'file_shot_misfit', file_shotmisfit, tidy(dir_working)//'/shot_misfit.bin')
 
         call readpar_logical(file_parameter, 'yn_continue', yn_continue_inv, .false.)
-        if (yn_continue_inv) then
+        if (yn_continue_inv .and. file_exists(file_datamisfit)) then
             resume_from_iter = max(1, count_nonempty_lines(file_datamisfit))
         else
             call readpar_int(file_parameter, 'resume_from_iter', resume_from_iter, 1)
@@ -621,6 +621,7 @@ contains
                         gmtr(i)%recr(j)%z >= rzmin .and. gmtr(i)%recr(j)%z <= rzmax .and. &
                         gmtr(i)%recr(j)%aoff >= offset_min .and. gmtr(i)%recr(j)%aoff <= offset_max .and. &
                         j >= rec_min .and. j <= rec_max .and. mod(j - rec_min, rec_every) == 0 .and. &
+                        .not. any(rec_exclude == j) .and. &
                         gmtr(i)%recr(j)%weight /= 0) then
                     l = l + 1
                 else

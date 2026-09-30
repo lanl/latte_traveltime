@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -477,7 +477,7 @@ contains
                                 end if
                             end do
                             ! Only regularize if close enough
-                            if (d <= ml_max_dist) then
+                            if (sqrt(d) <= ml_max_dist) then
                                 sxr(l, 1) = fx(sp)
                                 szr(l, 1) = fz(sp)
                             end if

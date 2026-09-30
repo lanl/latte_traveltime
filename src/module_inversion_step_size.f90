@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -961,7 +961,7 @@ contains
                 call compute_step_size_linear
             case ('quadratic')
                 call compute_step_size_quadratic
-            case ('line_search')
+            case ('line-search', 'line_search')
                 call compute_step_size_linesearch
         end select
 

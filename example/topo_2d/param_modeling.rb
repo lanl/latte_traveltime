@@ -5,7 +5,7 @@ nz = 101
 dx = 10
 dz = 10
 
-ns = 2
+ns = 30
 file_geometry = ./geometry/geometry.txt
 
 

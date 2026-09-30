@@ -23,8 +23,11 @@ grad_smoothz = 20
 
 niter_max = 50
 
-dir_working = test
+dir_working = test_tgpv_delayed
 
 sweep_stop_threshold = 1.0e-6
 
 verbose = y
+
+model_regularization_method = tgpv
+reg_scale_vp = 1~10:0, 11:0.2

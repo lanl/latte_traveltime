@@ -1,9 +1,12 @@
-bindir=$HOME/src/latte/bin
+#!/bin/bash
 
+set -e
+
+bindir=../../bin
+
+# Create the models and the geometry; the program needs FLIT and RGM
 make clean
 make
-
-# generate model and geometry
 ./exec1
 
 # forward modeling

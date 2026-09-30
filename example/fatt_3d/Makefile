@@ -5,17 +5,14 @@ objdir = ./obj
 moddir = ./obj
 
 # dependencies
-object1 = create_model_and_geometry.o
-object2 = add_noise.o
+object = create_model_and_geometry.o
 
-obj1 = $(addprefix $(objdir)/, $(object1))
-obj2 = $(addprefix $(objdir)/, $(object2))
+obj = $(addprefix $(objdir)/, $(object))
 
 # targets
-exec1 = $(PWD)/exec1
-exec2 = $(PWD)/exec2
+exec = $(PWD)/exec
 
-all: makedir $(exec1) $(exec2)
+all: makedir $(exec)
 
 # options
 flitdir = $(HOME)/src/flit
@@ -35,10 +32,7 @@ $(objdir)/%.o : ./%.f90
 	$(fc) -o $@ -c $(fflags) $(inc) $<
 
 # link
-$(exec1) : $(obj1)
-	$(fc) -o $@ $^ $(lflags) $(inc)
-	
-$(exec2) : $(obj2)
+$(exec) : $(obj)
 	$(fc) -o $@ $^ $(lflags) $(inc)
 
 # make directory

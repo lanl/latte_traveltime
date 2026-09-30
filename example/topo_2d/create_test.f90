@@ -66,8 +66,17 @@ program test
     p%nf = 6
     call p%generate
 
-    p%vp = rescale(p%vp, [2500.0, 5500.0])
-    p%vs = rescale(p%vs, [1500.0, 3500.0])
+    p%vp = rescale(p%vp, [2000.0, 4000.0])
+    p%vs = rescale(p%vs, [1200.0, 2400.0])
+
+    ! Increase the velocities by 2000 m/s per kilometer below the topography, so that the
+    ! first arrivals reach deeper; vs changes by the same factor as vp
+    do j = 1, n2
+        do i = t(j), n1
+            p%vs(i, j) = p%vs(i, j)*(1.0 + 2.0*(i - t(j))*10.0/p%vp(i, j))
+            p%vp(i, j) = p%vp(i, j) + 2.0*(i - t(j))*10.0
+        end do
+    end do
 
     vp = 1.0/gauss_filt(1.0/p%vp, [6.0, 20.0])
     vs = 1.0/gauss_filt(1.0/p%vs, [6.0, 20.0])
@@ -87,24 +96,25 @@ program test
     call output_array(vp, './model/vp_init.bin')
     call output_array(vs, './model/vs_init.bin')
 
-    ! Geometry
+    ! Geometry: 30 sources on the topographic surface, 100 m apart; every source records
+    ! the receivers at all surface grid points
     open (3, file='./geometry/geometry.txt')
-    do i = 1, 60
+    do i = 1, 30
         write (3, *) 'shot_'//num2str(i)//'_geometry.txt'
     end do
 
     close (3)
 
-    do ishot = 1, 60
+    do ishot = 1, 30
 
         open (3, file='./geometry/shot_'//num2str(ishot)//'_geometry.txt')
         write (3, *) ishot
         write (3, *)
         write (3, *) 1
 
-        j = nint((20.0 + (ishot - 1)*50.0)/10.0 + 1)
+        j = nint((50.0 + (ishot - 1)*100.0)/10.0 + 1)
 
-        write (3, '(3es, es)') 20.0 + (ishot - 1)*50.0, 0.0, (t(j) - 1.0)*10.0, 0.0
+        write (3, '(3es, es)') 50.0 + (ishot - 1)*100.0, 0.0, (t(j) - 1.0)*10.0, 0.0
         write (3, *)
 
         write (3, *) p%n2

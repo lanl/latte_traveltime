@@ -18,7 +18,7 @@ exec2 = $(PWD)/exec2
 all: makedir $(exec1) $(exec2)
 
 # options
-flitdir = $(HOME)/src/libflit
+flitdir = $(HOME)/src/flit
 rgmdir = $(HOME)/src/rgm
 
 include $(flitdir)/src/Makefile.in

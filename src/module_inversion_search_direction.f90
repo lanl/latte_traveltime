@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -85,6 +85,11 @@ contains
 
             ! Update search direction
             srch = -grad + beta*prev_srch
+
+            ! Restart with the steepest descent when the direction is not a descent direction
+            if (sum(grad*srch) >= 0) then
+                srch = -grad
+            end if
 
         end if
 

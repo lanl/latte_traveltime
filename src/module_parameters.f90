@@ -145,11 +145,8 @@ module parameters
     logical :: verbose
     integer :: sweep_niter_max = 10
     real :: sweep_stop_threshold = 1.0e-4
-    character(len=32) :: forward_eikonal_method
     real :: misfit_threshold
-    real :: energybal_power = 1.0
 
-    character(len=1024) :: dir_gradmask
     character(len=1024) :: file_andfaux, file_andfcoh
 
     integer :: resume_from_iter
@@ -159,12 +156,6 @@ module parameters
     logical :: yn_enforce_update = .false.
     logical :: trigger_jumpout = .false.
     logical :: put_synthetic_in_scratch = .false.
-
-    character(len=32), allocatable, dimension(:) :: record_processing
-    character(len=32), allocatable, dimension(:) :: encoded_record_processing
-    character(len=32), allocatable, dimension(:) :: synthetic_processing
-    character(len=32), allocatable, dimension(:) :: gradient_processing
-    character(len=32), allocatable, dimension(:) :: adjoint_source_processing
 
     character(len=32), allocatable, dimension(:) :: process_shot_grad, process_grad
 
@@ -307,8 +298,6 @@ contains
         call readpar_float(file_parameter, 'vpvsratio_smoothz', vpvsratio_smoothz, 0.0)
         call readpar_string(file_parameter, 'incident_wave', incident_wave, 'p')
 
-        call readpar_string(file_parameter, 'data_prefix', data_prefix, 'traveltime')
-        call readpar_float(file_parameter, 'energybal_power', energybal_power, 1.0)
         call readpar_float(file_parameter, 'misfit_threshold', misfit_threshold, float_huge)
 
         call readpar_int(file_parameter, 'ns', ns, 1)
@@ -385,7 +374,6 @@ contains
         call readpar_logical(file_parameter, 'verbose', verbose, .false.)
         call readpar_float(file_parameter, 'sweep_stop_threshold', sweep_stop_threshold, 1.0e-4)
         call readpar_int(file_parameter, 'sweep_niter_max', sweep_niter_max, 10)
-        call readpar_string(file_parameter, 'forward_eikonal_method', forward_eikonal_method, 'fast_sweep')
 
         call readpar_string(file_parameter, 'file_data_misfit', file_datamisfit, tidy(dir_working)//'/data_misfit.txt')
         call readpar_string(file_parameter, 'file_shot_misfit', file_shotmisfit, tidy(dir_working)//'/shot_misfit.bin')
@@ -397,8 +385,6 @@ contains
             call readpar_int(file_parameter, 'resume_from_iter', resume_from_iter, 1)
         end if
 
-        call readpar_nstring(file_parameter, 'process_record', record_processing, [''])
-        call readpar_nstring(file_parameter, 'process_synthetic', synthetic_processing, [''])
         call readpar_logical(file_parameter, 'uniform_processing', uniform_processing, .true.)
         call readpar_logical(file_parameter, 'yn_flat_stop', yn_flat_stop, .false.)
 
@@ -459,12 +445,8 @@ contains
         select case (which_medium)
             case ('acoustic-iso', 'acoustic-tti')
                 call readpar_nstring(file_parameter, 'data_name', data_name, ['p'])
-                call assert(size(data_name) == 1 .and. data_name(1) == 'p', &
-                    ' <read_parameter> Error: For acoustic, data_name must = p' )
             case('elastic-iso', 'elastic-tti')
                 call readpar_nstring(file_parameter, 'data_name', data_name, ['p', 's'])
-                call assert(size(data_name) == 2 .and. data_name(1) == 'p' .and. data_name(2) == 's', &
-                    ' <read_parameter> Error: For acoustic, data_name must = p, s' )
         end select
         ndata = size(data_name)
 

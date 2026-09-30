@@ -1,5 +1,5 @@
 #
-# © 2024. Triad National Security, LLC. All rights reserved.
+# © 2024-2026. Triad National Security, LLC. All rights reserved.
 #
 # This program was produced under U.S. Government contract 89233218CNA000001 
 # for Los Alamos National Laboratory (LANL), which is operated by 
@@ -24,18 +24,24 @@ moddir = ./obj
 # dependencies
 object2 = generate_data_2d.o
 object3 = generate_data_3d.o
+object2v2 = generate_data_2d_v2.o
+object3v2 = generate_data_3d_v2.o
 
 obj2 = $(addprefix $(objdir)/, $(object2))
 obj3 = $(addprefix $(objdir)/, $(object3))
+obj2v2 = $(addprefix $(objdir)/, $(object2v2))
+obj3v2 = $(addprefix $(objdir)/, $(object3v2))
 
 # targets
 exec2 = $(PWD)/exec2
 exec3 = $(PWD)/exec3
+exec2v2 = $(PWD)/exec2_v2
+exec3v2 = $(PWD)/exec3_v2
 
-all: makedir $(exec2) $(exec3)
+all: makedir $(exec2) $(exec3) $(exec2v2) $(exec3v2)
 
 # options
-flitdir = $(HOME)/src/libflit
+flitdir = $(HOME)/src/flit
 rgmdir = $(HOME)/src/rgm
 
 include $(flitdir)/src/Makefile.in
@@ -56,6 +62,12 @@ $(exec2) : $(obj2)
 	$(fc) -o $@ $^ $(lflags) $(inc)
 
 $(exec3) : $(obj3)
+	$(fc) -o $@ $^ $(lflags) $(inc)
+
+$(exec2v2) : $(obj2v2)
+	$(fc) -o $@ $^ $(lflags) $(inc)
+
+$(exec3v2) : $(obj3v2)
 	$(fc) -o $@ $^ $(lflags) $(inc)
 
 # make directory

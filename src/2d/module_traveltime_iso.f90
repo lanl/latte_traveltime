@@ -30,8 +30,10 @@ module traveltime_iso
 
     real, parameter :: huge_value = sqrt(float_huge)
 
-    double precision, allocatable, dimension(:, :) :: t0, pdxt0, pdzt0, tt, lambda
+    double precision, allocatable, dimension(:, :) :: t0, pdxt0, pdzt0, tt, lambda, adjsrc
     logical, allocatable, dimension(:, :) :: unknown, recrflag
+    ! Whether adjsrc holds point sources of the adjoint-state equation
+    logical :: point_source = .false.
 
     private
     public :: forward_iso
@@ -525,6 +527,8 @@ contains
 
                     if (lhs == 0) then
                         t = 0
+                    else if (point_source) then
+                        t = (rhs - adjsrc(i, j))/lhs
                     else
                         t = rhs/lhs
                     end if
@@ -837,6 +841,27 @@ contains
     end function cell_key
 
     !
+    !> The two grid points ii around a point at the 0-based fractional grid
+    !> coordinate p, 0 <= p <= n - 1, and their linear interpolation weights
+    !> w; for n = 1, both are the single grid point
+    !
+    pure subroutine linear_weights(p, n, ii, w)
+        double precision, intent(in) :: p
+        integer, intent(in) :: n
+        integer, dimension(1:2), intent(out) :: ii
+        double precision, dimension(1:2), intent(out) :: w
+        if (n == 1) then
+            ii = 1
+            w = [1.0d0, 0.0d0]
+        else
+            ii(1) = min(max(floor(p), 0), n - 2) + 1
+            ii(2) = ii(1) + 1
+            w(2) = min(max(p - (ii(1) - 1), 0.0d0), 1.0d0)
+            w(1) = 1 - w(2)
+        end if
+    end subroutine linear_weights
+
+    !
     !> Fast sweeping factorized eikonal solver
     !
     subroutine forward_iso(v, d, o, geom, t, trec)
@@ -1009,18 +1034,37 @@ contains
 
     !
     !> Compute adjoint field for FATT
+    !>
+    !> receiver selects how the traveltime residuals at the receivers, dt_r
+    !> in tresidual, enter the adjoint-state equation:
+    !>
+    !> nearest (the default without receiver): a Dirichlet boundary
+    !> condition. The adjoint field at the grid point nearest to a receiver
+    !> is fixed to the traveltime residual there, and -div(lambda grad T) = 0
+    !> elsewhere.
+    !>
+    !> linear: true adjoint sources, -div(lambda grad T) = sum_r dt_r
+    !> delta(x - x_r). The source of a receiver goes to the four corners of
+    !> the receiver's grid cell with the bilinear weights by which forward_iso
+    !> interpolates the receiver traveltime, i.e., the transpose of that
+    !> interpolation, divided by the cell area. No grid point is fixed, so
+    !> the sources of nearby receivers add up, and the field of a receiver
+    !> passes through the grid points of the others.
     !
-    subroutine adjoint_iso(v, d, o, geom, t, tresidual, tadj)
+    subroutine adjoint_iso(v, d, o, geom, t, tresidual, tadj, receiver)
 
         real, dimension(:, :), intent(in) :: v, t
         real, dimension(1:2), intent(in) :: d, o
         type(source_receiver_geometry), intent(in) :: geom
         real, dimension(:, :), intent(in) :: tresidual
         real, dimension(:, :), allocatable, intent(out) :: tadj
+        character(len=*), intent(in), optional :: receiver
 
         double precision, allocatable, dimension(:, :) :: vp, lambda_prev
-        integer :: nx, nz, iter, i, irx, irz !, j
-        double precision :: lambda_diff, dx, dz, ox, oz
+        integer :: nx, nz, iter, i, irx, irz, a, b !, j
+        integer, dimension(1:2) :: ii, kk
+        double precision :: lambda_diff, dx, dz, ox, oz, r
+        double precision, dimension(1:2) :: wx, wz
 
         dx = d(1)
         dz = d(2)
@@ -1032,24 +1076,55 @@ contains
         nx = size(vp, 1)
         nz = size(vp, 2)
 
+        point_source = .false.
+        if (present(receiver)) then
+            point_source = receiver == 'linear'
+        end if
+
         recrflag = falses(nx, nz)
         lambda = zeros(nx, nz)
         lambda_prev = zeros(nx, nz)
         lambda_diff = huge_value
 
-        ! Get the misfit values at the receivers; here we cannot use parallel as
-        ! in loc + tomo, initial virtual receivers may be at the same position.
-        do i = 1, geom%nr
-            if (geom%recr(i)%weight /= 0) then
-                irx = nint((geom%recr(i)%x - ox)/dx) + 1
-                irz = nint((geom%recr(i)%z - oz)/dz) + 1
-                lambda(irx, irz) = lambda(irx, irz) + tresidual(i, 1)
-                recrflag(irx, irz) = .true.
-            end if
-        end do
-        where (.not. recrflag)
+        if (point_source) then
+
+            ! The point sources of the receivers inside the medium, the same
+            ! receivers as in forward_iso; serial because receivers may share
+            ! grid points
+            adjsrc = zeros(nx, nz)
+            do i = 1, geom%nr
+                if (geom%recr(i)%weight /= 0) then
+                    if (point_in_domain(dble([geom%recr(i)%x, geom%recr(i)%z]), [nx, nz], [ox, oz], [dx, dz], vp)) then
+                        call linear_weights((geom%recr(i)%x - ox)/dx, nx, ii, wx)
+                        call linear_weights((geom%recr(i)%z - oz)/dz, nz, kk, wz)
+                        r = tresidual(i, 1)/(dx*dz)
+                        do b = 1, 2
+                            do a = 1, 2
+                                adjsrc(ii(a), kk(b)) = adjsrc(ii(a), kk(b)) + r*wx(a)*wz(b)
+                            end do
+                        end do
+                    end if
+                end if
+            end do
             lambda = huge_value
-        end where
+
+        else
+
+            ! Get the misfit values at the receivers; here we cannot use parallel as
+            ! in loc + tomo, initial virtual receivers may be at the same position.
+            do i = 1, geom%nr
+                if (geom%recr(i)%weight /= 0) then
+                    irx = nint((geom%recr(i)%x - ox)/dx) + 1
+                    irz = nint((geom%recr(i)%z - oz)/dz) + 1
+                    lambda(irx, irz) = lambda(irx, irz) + tresidual(i, 1)
+                    recrflag(irx, irz) = .true.
+                end if
+            end do
+            where (.not. recrflag)
+                lambda = huge_value
+            end where
+
+        end if
 
         !        ! This is to set lambda = 0 on boundaries, but does not make a difference
         !        ! when both source and receivers are inside and could be ignored.

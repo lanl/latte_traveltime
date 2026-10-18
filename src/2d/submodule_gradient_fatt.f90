@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -158,7 +158,7 @@ contains
                     call adjoint_iso( &
                         vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                         [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, &
-                        ttp_residual, lam)
+                        ttp_residual, lam, adjoint_receiver)
 
                     if (yn_precond) then
 
@@ -166,7 +166,7 @@ contains
                         call adjoint_iso( &
                             vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                             [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, &
-                            -ones_like(ttp_residual), energy)
+                            -ones_like(ttp_residual), energy, adjoint_receiver)
                             energy = -energy
 
                         lam = -lam/(energy + precond_eps*maxval(abs(energy)))
@@ -193,7 +193,7 @@ contains
                     call adjoint_iso( &
                         vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                         [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, &
-                        ttp_residual, lam)
+                        ttp_residual, lam, adjoint_receiver)
 
                     if (yn_precond) then
 
@@ -201,7 +201,7 @@ contains
                         call adjoint_iso( &
                             vp(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                             [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), ttp, &
-                            -ones_like(ttp_residual), energy)
+                            -ones_like(ttp_residual), energy, adjoint_receiver)
                             energy = -energy
 
                         lam = -lam/(energy + precond_eps*maxval(abs(energy)))
@@ -227,7 +227,7 @@ contains
                     call adjoint_iso( &
                         vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                         [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), tts, &
-                        tts_residual, lam)
+                        tts_residual, lam, adjoint_receiver)
 
                     if (yn_precond) then
 
@@ -235,7 +235,7 @@ contains
                         call adjoint_iso( &
                             vs(shot_nzbeg:shot_nzend, shot_nxbeg:shot_nxend), &
                             [dx, dz], [shot_xbeg, shot_zbeg], gmtr(ishot), tts, &
-                            -ones_like(tts_residual), energy)
+                            -ones_like(tts_residual), energy, adjoint_receiver)
                             energy = -energy
 
                         lam = -lam/(energy + precond_eps*maxval(abs(energy)))

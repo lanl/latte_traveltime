@@ -27,7 +27,11 @@ module gradient
     implicit none
 
     real :: refltaper, reflwindow, reflmin, reflmax
-    real, allocatable, dimension(:, :, :) :: refl_all
+    ! Gauss-Newton step of the reflector depths (refine_reflector, and the
+    ! joint update with step_max_refl > 0): row l of model_grad(refl)
+    ! accumulates the numerator of reflector l by column, and refl_den the
+    ! denominator (see reflector_direction)
+    real, allocatable, dimension(:, :) :: refl_den
 
     interface
         module subroutine compute_gradient_shots_fatt
@@ -40,6 +44,8 @@ module gradient
         end subroutine
         module subroutine compute_image_shots
         end subroutine
+        module subroutine compute_reflector_step_shots
+        end subroutine
     end interface
 
     private
@@ -49,6 +55,10 @@ module gradient
     public :: process_gradient
     public :: output_gradient
     public :: compute_image_shots
+    public :: move_reflector
+    public :: compute_reflector_step_shots
+    public :: zero_reflector_step
+    public :: reflector_step
 
 contains
 
@@ -68,8 +78,8 @@ contains
             end select
         end do
 
-        if (yn_update_reflector) then
-            refl_all = zeros(nz, nx, nrefl)
+        if (reflector_joint()) then
+            refl_den = zeros(nz, nx)
         end if
 
     end subroutine zero_gradient
@@ -99,7 +109,8 @@ contains
     !
     subroutine process_gradient
 
-        integer :: i, l
+        integer :: i
+        real, allocatable, dimension(:, :) :: dzr
 
         do i = 1, nmodel
 
@@ -113,18 +124,19 @@ contains
                         call process_model_single_parameter(model_grad(i)%array, 'grad_'//tidy(model_name(i)), param_name=model_m(i)%name)
                     end if
 
+                else if (reflector_joint()) then
+
+                    ! Joint update of the reflector depths: row l of the gradient
+                    ! holds minus the Gauss-Newton depth change of reflector l by
+                    ! column, so that the search direction is that change
+                    call reflector_direction(model_grad(i)%array, refl_den, dzr)
+                    model_grad(i)%array = -dzr
+
                 else
 
-                    do l = 1, nrefl
-                        call readpar_xfloat(file_parameter, 'reflector_'//num2str(l)//'_taper_length', refltaper, 10*dx, iter*1.0)
-                        call assert(refltaper < nx*dx/3.0, ' <compute_image_shots> Error: taper is too long. ')
-                        call readpar_xfloat(file_parameter, 'reflector_'//num2str(l)//'_smooth_window', reflwindow, 0.2*(nx*dx - 2*refltaper), iter*1.0)
-                        call readpar_xfloat(file_parameter, 'reflector_'//num2str(l)//'_depth_min', reflmin, oz, iter*1.0)
-                        call readpar_xfloat(file_parameter, 'reflector_'//num2str(l)//'_depth_max', reflmax, oz + (nz - 1)*dz, iter*1.0)
-                        call smooth_reflector(refl_all(:, :, l))
-                        model_grad(i)%array = model_grad(i)%array - refl_all(:, :, l)*l
-                    end do
-                    call process_model_single_parameter(model_grad(i)%array, 'refl')
+                    ! The reflector model is set by imaging and refinement
+                    ! (update_reflector_image), not by a gradient step
+                    model_grad(i)%array = 0.0
 
                 end if
 
@@ -155,59 +167,243 @@ contains
     end subroutine output_gradient
 
     !
-    !> Specially process reflector image
+    !> Build the model of reflector l from the per-shot images zs(nx, ns): the
+    !> fractional 1-based z index of the reflector in each column for each
+    !> shot, or 0 where the shot has no crossing. Every isochron lies above
+    !> the reflector except at its specular point, so a crossing that is not
+    !> specular (the isochron of an end receiver beyond the lit part of the
+    !> reflector, or the small negative region around a receiver) lies above
+    !> the reflector, and the reflector is the deepest crossing over the
+    !> shots. A column therefore takes the median of the shots whose crossing
+    !> is within half a grid cell of the deepest one. The columns without a
+    !> crossing are interpolated from the others. The curve is smoothed when
+    !> reflector_<l>_smooth_window > 0, clipped to the depth range of the
+    !> reflector, and stored at the nearest grid point of each column as
+    !> l + dfrac, where dfrac in [-0.5, 0.5) is the offset of the reflector
+    !> from the grid point in grid cells.
     !
-    subroutine smooth_reflector(img)
+    subroutine build_reflector(zs, l, refl)
 
-        real, dimension(:, :), intent(inout) :: img
+        real, dimension(:, :), intent(in) :: zs
+        integer, intent(in) :: l
+        real, dimension(:, :), intent(inout) :: refl
 
-        integer :: tplen
-        real :: window
-        real, allocatable, dimension(:) :: x, y, xx, yy
-        integer :: n1, n2, i, j
-        integer :: imin
-        real, allocatable, dimension(:, :) :: v
+        real, allocatable, dimension(:) :: zbar, x, xx, yy
+        logical, allocatable, dimension(:) :: has
+        integer :: i, j, k, n, j1, j2, tplen
+        real :: dfrac, window, ztol, zmax
 
-        n1 = size(img, 1)
-        n2 = size(img, 2)
-        tplen = nint(refltaper/dx)
-        window = reflwindow/dx/n2
+        ! The crossings within half a grid cell of the deepest one
+        ztol = 0.5
+        n = size(zs, 1)
+        zbar = zeros(n)
+        has = falses(n)
+        do j = 1, n
+            if (any(zs(j, :) > 0)) then
+                zmax = maxval(zs(j, :))
+                zbar(j) = median(pack(zs(j, :), zs(j, :) >= zmax - ztol))
+                has(j) = .true.
+            end if
+        end do
+        if (rankid == 0) then
+            call warn(date_time_compact()//' Reflector '//num2str(l)//' is imaged in ' &
+                //num2str(count(has))//' of '//num2str(n)//' columns. ')
+        end if
+        if (.not. any(has)) then
+            return
+        end if
 
-        v = img
+        ! Columns without an image: linear interpolation between imaged
+        ! columns, and the nearest imaged column beyond the ends
+        j1 = 1
+        do while (.not. has(j1))
+            j1 = j1 + 1
+        end do
+        j2 = n
+        do while (.not. has(j2))
+            j2 = j2 - 1
+        end do
+        zbar(1:j1 - 1) = zbar(j1)
+        zbar(j2 + 1:n) = zbar(j2)
+        j = j1
+        do while (j < j2)
+            if (has(j + 1)) then
+                j = j + 1
+            else
+                i = j + 1
+                do while (.not. has(i))
+                    i = i + 1
+                end do
+                do k = j + 1, i - 1
+                    zbar(k) = zbar(j) + (zbar(i) - zbar(j))*real(k - j)/real(i - j)
+                end do
+                j = i
+            end if
+        end do
 
-        x = regspace(0.0, 1.0, n2 - 1.0)
-        y = zeros(n2)
+        ! Optional LOWESS smoothing, excluding a taper at each end
+        if (reflwindow > 0) then
+            tplen = min(max(nint(refltaper/dx), 0), (n - 2)/2)
+            window = reflwindow/dx/n
+            x = regspace(0.0, 1.0, n - 1.0)
+            xx = x(tplen + 1:n - tplen)
+            yy = zbar(tplen + 1:n - tplen)
+            yy = lowess_filt(xx, yy, xx, window=window, robust=.true.)
+            zbar = ginterp(xx, yy, x, 'linear')
+        end if
 
-        do j = 1, n2
-            imin = as_scalar(maxloc(v(:, j)))
-            do i = 1, n1
-                if (i == imin) then
-                    v(imin, j) = 1.0
-                    y(j) = imin
-                else
-                    v(i, j) = 0.0
+        ! Depth range, and the label-plus-offset model
+        zbar = clip(zbar, (reflmin - oz)/dz + 1.0, (reflmax - oz)/dz + 1.0)
+        zbar = clip(zbar, 1.0, nz*1.0)
+        do j = 1, n
+            i = nint(zbar(j))
+            dfrac = zbar(j) - i
+            i = min(max(i, 1), nz)
+            refl(i, j) = l + dfrac
+        end do
+
+    end subroutine build_reflector
+
+    !
+    !> The fractional 1-based z index of reflector l in each column of a
+    !> label-plus-offset reflector model, or 0 where the column has no point
+    !> of the reflector
+    !
+    subroutine reflector_depth_index(refl, l, zidx)
+
+        real, dimension(:, :), intent(in) :: refl
+        integer, intent(in) :: l
+        real, dimension(:), intent(out) :: zidx
+
+        integer :: i, j
+
+        zidx = 0.0
+        do j = 1, size(refl, 2)
+            do i = 1, size(refl, 1)
+                if (nint(refl(i, j)) == l) then
+                    zidx(j) = i + (refl(i, j) - l)
+                    exit
                 end if
             end do
         end do
-        y = clip(y, nint((reflmin - oz)/dz) + 1.0, nint((reflmax - oz)/dz) + 1.0)
 
-        xx = x(tplen + 1:n2 - tplen)
-        yy = y(tplen + 1:n2 - tplen)
+    end subroutine reflector_depth_index
 
-        ! The window should be a fraction of the total length of xx
-        yy = lowess_filt(xx, yy, xx, window=window, robust=.true.)
-        y = ginterp(xx, yy, x, 'linear')
+    !
+    !> Zero the accumulators of the Gauss-Newton step of the reflector depths
+    !
+    subroutine zero_reflector_step(irefl)
 
-        y = clip(y, nint((reflmin - oz)/dz) + 1.0, nint((reflmax - oz)/dz) + 1.0)
+        integer, intent(in) :: irefl
 
-        v = 0
-        do j = 1, n2
-            v(nint(y(j)), j) = 1.0
+        model_grad(irefl)%array = zeros(nz, nx)
+        refl_den = zeros(nz, nx)
+
+    end subroutine zero_reflector_step
+
+    !
+    !> The Gauss-Newton step of the reflector depths from the accumulators of
+    !> compute_reflector_step_shots (see reflector_direction), capped at
+    !> step_max: row l of dzr holds the depth change of reflector l in each
+    !> column, in length units.
+    !
+    subroutine reflector_step(irefl, step_max, dzr)
+
+        integer, intent(in) :: irefl
+        real, intent(in) :: step_max
+        real, allocatable, dimension(:, :), intent(out) :: dzr
+
+        call reflector_direction(model_grad(irefl)%array, refl_den, dzr)
+        dzr = clip(dzr, -step_max, step_max)
+
+    end subroutine reflector_step
+
+    !
+    !> The Gauss-Newton depth change of the reflectors from the accumulated
+    !> numerator num and denominator den: row l of dzr holds the change of
+    !> reflector l in each column, in length units, without a cap. num and den
+    !> are smoothed along x with a Gaussian of length refl_refine_smooth
+    !> before the division, which gives the least-squares depth change that is
+    !> locally constant over the smoothing length. The damping is 1% of the
+    !> largest smoothed den of each reflector, so weakly lit columns move
+    !> little.
+    !
+    subroutine reflector_direction(num, den, dzr)
+
+        real, dimension(:, :), intent(in) :: num, den
+        real, allocatable, dimension(:, :), intent(out) :: dzr
+
+        real, allocatable, dimension(:, :) :: sn, sd
+        real :: smooth
+        integer :: l
+
+        call readpar_xfloat(file_parameter, 'refl_refine_smooth', smooth, 5*dx, iter*1.0)
+        sn = num
+        sd = den
+        if (smooth > 0) then
+            sn = gauss_filt(sn, [0.0, smooth/dx])
+            sd = gauss_filt(sd, [0.0, smooth/dx])
+        end if
+        dzr = zeros(nz, nx)
+        do l = 1, nrefl
+            where (sd(l, :) > 0)
+                dzr(l, :) = -sn(l, :)/(sd(l, :) + 0.01*maxval(sd(l, :)))
+            end where
         end do
 
-        img = v
+    end subroutine reflector_direction
 
-    end subroutine smooth_reflector
+    !
+    !> Whether the reflector depths take part in the joint update with the
+    !> velocities, which step_max_refl > 0 selects in the current iteration
+    !
+    logical function reflector_joint()
+        real :: step
+        reflector_joint = .false.
+        if (yn_update_reflector) then
+            call readpar_xfloat(file_parameter, 'step_max_refl', step, 0.0, iter*1.0)
+            reflector_joint = step > 0
+        end if
+    end function reflector_joint
+
+    !
+    !> Move the reflectors of a label-plus-offset model: row l of dzr holds the
+    !> depth change of reflector l in each column, in length units. The depths
+    !> stay within reflector_<l>_depth_min and _max.
+    !
+    subroutine move_reflector(refl, dzr)
+
+        real, dimension(:, :), intent(inout) :: refl
+        real, dimension(:, :), intent(in) :: dzr
+
+        real, allocatable, dimension(:, :) :: zidx
+        real :: zlo, zhi, dfrac
+        integer :: i, j, l, n
+
+        n = size(refl, 2)
+        zidx = zeros(n, nrefl)
+        do l = 1, nrefl
+            call reflector_depth_index(refl, l, zidx(:, l))
+        end do
+        refl = 0.0
+        do l = 1, nrefl
+            call readpar_xfloat(file_parameter, 'reflector_'//num2str(l)//'_depth_min', zlo, oz, iter*1.0)
+            call readpar_xfloat(file_parameter, 'reflector_'//num2str(l)//'_depth_max', zhi, oz + (nz - 1)*dz, iter*1.0)
+            zlo = (zlo - oz)/dz + 1.0
+            zhi = (zhi - oz)/dz + 1.0
+            do j = 1, n
+                if (zidx(j, l) > 0) then
+                    zidx(j, l) = zidx(j, l) + dzr(l, j)/dz
+                    zidx(j, l) = min(max(zidx(j, l), max(zlo, 1.0)), min(zhi, nz*1.0))
+                    i = nint(zidx(j, l))
+                    dfrac = zidx(j, l) - i
+                    i = min(max(i, 1), nz)
+                    refl(i, j) = l + dfrac
+                end if
+            end do
+        end do
+
+    end subroutine move_reflector
 
     !
     !> Process 2D model for each shot

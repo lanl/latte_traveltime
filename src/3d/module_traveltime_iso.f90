@@ -25,13 +25,18 @@ module traveltime_iso
     use parameters
     use utility
     use omp_lib
+#ifdef cuda
+    use traveltime_iso_cuda
+#endif
 
     implicit none
 
     real, parameter :: huge_value = sqrt(float_huge)
 
-    double precision, allocatable, dimension(:, :, :) :: t0, pdxt0, pdyt0, pdzt0, tt, lambda
+    double precision, allocatable, dimension(:, :, :) :: t0, pdxt0, pdyt0, pdzt0, tt, lambda, adjsrc
     logical, allocatable, dimension(:, :, :) :: unknown, recrflag
+    ! Whether adjsrc holds point sources of the adjoint-state equation
+    logical :: point_source = .false.
 
     private
     public :: forward_iso
@@ -108,10 +113,10 @@ contains
         ! In 3D, the maximum level is nz + (ny - 1) + (nx - 1)
         do level = 1, nx + ny + nz - 2
 
-            kbeg = ifelse(level <= nx + ny, nzbeg, nzbeg + (level - (nx + ny - 1))*nzd)
+            kbeg = ifelse(level <= nx + ny - 1, nzbeg, nzbeg + (level - (nx + ny - 1))*nzd)
             kend = ifelse(level <= nz, nzbeg + (level - 1)*nzd, nzend)
 
-            jbeg = ifelse(level <= nx + ny, nybeg, nybeg + (level - (nx + ny - 1))*nyd)
+            jbeg = ifelse(level <= nx + nz - 1, nybeg, nybeg + (level - (nx + nz - 1))*nyd)
             jend = ifelse(level <= ny, nybeg + (level - 1)*nyd, nyend)
 
             !$omp parallel do private(i, j, k, &
@@ -565,10 +570,10 @@ contains
         ! In 3D, the maximum level is nz + (ny - 1) + (nx - 1)
         do level = 1, nx + ny + nz - 2
 
-            kbeg = ifelse(level <= nx + ny, nzbeg, nzbeg + (level - (nx + ny - 1))*nzd)
+            kbeg = ifelse(level <= nx + ny - 1, nzbeg, nzbeg + (level - (nx + ny - 1))*nzd)
             kend = ifelse(level <= nz, nzbeg + (level - 1)*nzd, nzend)
 
-            jbeg = ifelse(level <= nx + ny, nybeg, nybeg + (level - (nx + ny - 1))*nyd)
+            jbeg = ifelse(level <= nx + nz - 1, nybeg, nybeg + (level - (nx + nz - 1))*nyd)
             jend = ifelse(level <= ny, nybeg + (level - 1)*nyd, nyend)
 
             !$omp parallel do private(i, j, k, txyz1, txyz2, txyz3, txyz4, txyz5, txyz6, txyz7, txyz8, &
@@ -744,10 +749,10 @@ contains
         ! In 3D, the maximum level is n3 + (n2 - 1) + (n1 - 1)
         do level = 1, n1 + n2 + n3 - 2
 
-            kbeg = ifelse(level <= n1 + n2, n3beg, n3beg + (level - (n1 + n2 - 1))*n3d)
+            kbeg = ifelse(level <= n1 + n2 - 1, n3beg, n3beg + (level - (n1 + n2 - 1))*n3d)
             kend = ifelse(level <= n3, n3beg + (level - 1)*n3d, n3end)
 
-            jbeg = ifelse(level <= n1 + n2, n2beg, n2beg + (level - (n1 + n2 - 1))*n2d)
+            jbeg = ifelse(level <= n1 + n3 - 1, n2beg, n2beg + (level - (n1 + n3 - 1))*n2d)
             jend = ifelse(level <= n2, n2beg + (level - 1)*n2d, n2end)
 
             !$omp parallel do private(i, j, k, i1, i2, j1, j2, k1, k2, &
@@ -839,6 +844,8 @@ contains
 
                         if (lhs == 0) then
                             t = 0
+                        else if (point_source) then
+                            t = (rhs - adjsrc(i, j, k))/lhs
                         else
                             t = rhs/lhs
                         end if
@@ -1176,6 +1183,27 @@ contains
     end function cell_key
 
     !
+    !> The two grid points ii around a point at the 0-based fractional grid
+    !> coordinate p, 0 <= p <= n - 1, and their linear interpolation weights
+    !> w; for n = 1, both are the single grid point
+    !
+    pure subroutine linear_weights(p, n, ii, w)
+        double precision, intent(in) :: p
+        integer, intent(in) :: n
+        integer, dimension(1:2), intent(out) :: ii
+        double precision, dimension(1:2), intent(out) :: w
+        if (n == 1) then
+            ii = 1
+            w = [1.0d0, 0.0d0]
+        else
+            ii(1) = min(max(floor(p), 0), n - 2) + 1
+            ii(2) = ii(1) + 1
+            w(2) = min(max(p - (ii(1) - 1), 0.0d0), 1.0d0)
+            w(1) = 1 - w(2)
+        end if
+    end subroutine linear_weights
+
+    !
     !> Fast sweeping factorized eikonal solver
     !
     subroutine forward_iso(v, d, o, geom, t, trec)
@@ -1277,6 +1305,15 @@ contains
         ! For timing the modeling, commented out for clarity
         time1 = omp_get_wtime()
 
+#if defined(cuda) && !defined(legacy_solver)
+        ! On a GPU, all the iterations run here, and the loop below does not
+        ! start. If the GPU fails, niter stays 0, and the loop runs on the CPU.
+        if (use_gpu()) then
+            call fast_sweep_forward_gpu(nx, ny, nz, dx, dy, dz, vp, t0, pdxt0, pdyt0, pdzt0, tt, &
+                dble(huge_value), niter, ttdiff)
+        end if
+#endif
+
         do while (ttdiff >= sweep_stop_threshold .and. niter < sweep_niter_max)
 
             tt_prev = tt
@@ -1366,18 +1403,37 @@ contains
 
     !
     !> Compute adjoint field for FATT
+    !>
+    !> receiver selects how the traveltime residuals at the receivers, dt_r
+    !> in tresidual, enter the adjoint-state equation:
+    !>
+    !> nearest (the default without receiver): a Dirichlet boundary
+    !> condition. The adjoint field at the grid point nearest to a receiver
+    !> is fixed to the traveltime residual there, and -div(lambda grad T) = 0
+    !> elsewhere.
+    !>
+    !> linear: true adjoint sources, -div(lambda grad T) = sum_r dt_r
+    !> delta(x - x_r). The source of a receiver goes to the eight corners of
+    !> the receiver's grid cell with the trilinear weights by which forward_iso
+    !> interpolates the receiver traveltime, i.e., the transpose of that
+    !> interpolation, divided by the cell volume. No grid point is fixed, so
+    !> the sources of nearby receivers add up, and the field of a receiver
+    !> passes through the grid points of the others.
     !
-    subroutine adjoint_iso(v, d, o, geom, t, tresidual, tadj)
+    subroutine adjoint_iso(v, d, o, geom, t, tresidual, tadj, receiver)
 
         real, dimension(:, :, :), intent(in) :: v, t
         real, dimension(1:3), intent(in) :: d, o
         type(source_receiver_geometry), intent(in) :: geom
         real, dimension(:, :), intent(in) :: tresidual
         real, dimension(:, :, :), allocatable, intent(out) :: tadj
+        character(len=*), intent(in), optional :: receiver
 
         double precision, allocatable, dimension(:, :, :) :: vp, lambda_prev
-        integer :: nx, ny, nz, iter, i, irx, iry, irz !, j, k
-        double precision :: lambda_diff, dx, dy, dz, ox, oy, oz
+        integer :: nx, ny, nz, iter, i, irx, iry, irz, a, b, c !, j, k
+        integer, dimension(1:2) :: ii, jj, kk
+        double precision :: lambda_diff, dx, dy, dz, ox, oy, oz, r
+        double precision, dimension(1:2) :: wx, wy, wz
 
         dx = d(1)
         dy = d(2)
@@ -1392,24 +1448,59 @@ contains
         ny = size(tt, 2)
         nz = size(tt, 3)
 
+        point_source = .false.
+        if (present(receiver)) then
+            point_source = receiver == 'linear'
+        end if
+
         recrflag = falses(nx, ny, nz)
         lambda = zeros(nx, ny, nz)
         lambda_prev = zeros(nx, ny, nz)
         lambda_diff = huge_value
 
-        ! Get the misfit values at the receivers
-        do i = 1, geom%nr
-            if (geom%recr(i)%weight /= 0) then
-                irx = nint((geom%recr(i)%x - ox)/dx) + 1
-                iry = nint((geom%recr(i)%y - oy)/dy) + 1
-                irz = nint((geom%recr(i)%z - oz)/dz) + 1
-                lambda(irx, iry, irz) = lambda(irx, iry, irz) + tresidual(i, 1)
-                recrflag(irx, iry, irz) = .true.
-            end if
-        end do
-        where (.not. recrflag)
+        if (point_source) then
+
+            ! The point sources of the receivers inside the medium, the same
+            ! receivers as in forward_iso; serial because receivers may share
+            ! grid points
+            adjsrc = zeros(nx, ny, nz)
+            do i = 1, geom%nr
+                if (geom%recr(i)%weight /= 0) then
+                    if (point_in_domain(dble([geom%recr(i)%x, geom%recr(i)%y, geom%recr(i)%z]), &
+                            [nx, ny, nz], [ox, oy, oz], [dx, dy, dz], vp)) then
+                        call linear_weights((geom%recr(i)%x - ox)/dx, nx, ii, wx)
+                        call linear_weights((geom%recr(i)%y - oy)/dy, ny, jj, wy)
+                        call linear_weights((geom%recr(i)%z - oz)/dz, nz, kk, wz)
+                        r = tresidual(i, 1)/(dx*dy*dz)
+                        do c = 1, 2
+                            do b = 1, 2
+                                do a = 1, 2
+                                    adjsrc(ii(a), jj(b), kk(c)) = adjsrc(ii(a), jj(b), kk(c)) + r*wx(a)*wy(b)*wz(c)
+                                end do
+                            end do
+                        end do
+                    end if
+                end if
+            end do
             lambda = huge_value
-        end where
+
+        else
+
+            ! Get the misfit values at the receivers
+            do i = 1, geom%nr
+                if (geom%recr(i)%weight /= 0) then
+                    irx = nint((geom%recr(i)%x - ox)/dx) + 1
+                    iry = nint((geom%recr(i)%y - oy)/dy) + 1
+                    irz = nint((geom%recr(i)%z - oz)/dz) + 1
+                    lambda(irx, iry, irz) = lambda(irx, iry, irz) + tresidual(i, 1)
+                    recrflag(irx, iry, irz) = .true.
+                end if
+            end do
+            where (.not. recrflag)
+                lambda = huge_value
+            end where
+
+        end if
 
         !        ! This is to set lambda = 0 on boundaries, but does not make a difference
         !        ! when both source and receivers are inside and could be ignored.
@@ -1430,6 +1521,21 @@ contains
 
         ! Fast sweep to solve the adjoint-state equation
         iter = 0
+
+#ifdef cuda
+        ! On a GPU, all the iterations run here, and the loop below does not
+        ! start. If the GPU fails, iter stays 0, and the loop runs on the CPU.
+        if (use_gpu()) then
+            if (point_source) then
+                call fast_sweep_adjoint_gpu(nx, ny, nz, dx, dy, dz, tt, recrflag, lambda, &
+                    dble(huge_value), iter, lambda_diff, adjsrc)
+            else
+                call fast_sweep_adjoint_gpu(nx, ny, nz, dx, dy, dz, tt, recrflag, lambda, &
+                    dble(huge_value), iter, lambda_diff)
+            end if
+        end if
+#endif
+
         do while (lambda_diff >= sweep_stop_threshold .and. iter < sweep_niter_max)
 
             ! Save previous step

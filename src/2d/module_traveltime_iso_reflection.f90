@@ -28,10 +28,13 @@ module traveltime_iso_reflection
     public :: forward_iso_reflection
     public :: adjoint_iso_reflection
     public :: image_iso
+    public :: adjoint_iso_reflection_at_reflector
 
     public :: forward_iso_reflection_elastic
     public :: adjoint_iso_reflection_elastic
     public :: image_iso_elastic
+
+    private :: reflector_point, backpropagate_time, zero_crossings
 
 contains
 
@@ -54,8 +57,9 @@ contains
         type(source_receiver_geometry) :: sg
         real, allocatable, dimension(:, :) :: tt0, tt, ttrec
         integer :: nrefl, i, j, l, h, mx, mz !imin,
+        real :: zf, tf
 
-        nrefl = int(maxval(refl))
+        nrefl = nint(maxval(refl))
         trec = zeros(geom%nr, nrefl + 1)
         mz = size(v, 1)
         mx = size(v, 2)
@@ -81,10 +85,13 @@ contains
             do j = 1, mx
                 do i = 1, mz
                     if (nint(refl(i, j)) == l) then
-                        sg%srcr(h)%z = o(2) + (i - 1)*dz
+                        ! The reflector lies refl - l grid cells below the grid point,
+                        ! or above it when negative
+                        call reflector_point(refl(i, j) - l, i, mz, tt0(:, j), zf, tf)
+                        sg%srcr(h)%z = o(2) + zf*dz
                         sg%srcr(h)%y = 0
                         sg%srcr(h)%x = o(1) + (j - 1)*dx
-                        sg%srcr(h)%t0 = tt0(i, j)
+                        sg%srcr(h)%t0 = tf
                         h = h + 1
                     end if
                 end do
@@ -104,7 +111,7 @@ contains
     !
     !> @brife Compute adjoint field for TRTT in 2D isotropic acoustic media
     !
-    subroutine adjoint_iso_reflection(v, d, o, geom, tall, refl, tresidual, tadj)
+    subroutine adjoint_iso_reflection(v, d, o, geom, tall, refl, tresidual, tadj, trefl)
 
         real, dimension(:, :), intent(in) :: v, refl
         real, dimension(:, :, :), intent(in) :: tall
@@ -112,16 +119,23 @@ contains
         type(source_receiver_geometry), intent(in) :: geom
         real, dimension(:, :), intent(in) :: tresidual
         real, dimension(:, :, :), allocatable, intent(out) :: tadj
+        !> The receiver-side adjoint field of the reflected leg of each reflector
+        !> at the points of that reflector, zero elsewhere, as in
+        !> adjoint_iso_reflection_at_reflector
+        real, dimension(:, :, :), allocatable, intent(out), optional :: trefl
 
         type(source_receiver_geometry) :: sg
         real, allocatable, dimension(:, :) :: ta, tr
         integer :: nrefl, i, j, l, h, mx, mz
         integer :: mf = 10
 
-        nrefl = int(maxval(refl))
+        nrefl = nint(maxval(refl))
         mz = size(v, 1)
         mx = size(v, 2)
         tadj = zeros(mz, mx, nrefl + 1)
+        if (present(trefl)) then
+            trefl = zeros(mz, mx, max(nrefl, 1))
+        end if
 
         ! Compute receiver-side transmission adjoint field
         sg = geom
@@ -156,6 +170,9 @@ contains
                         sg%recr(h)%x = o(1) + (j - 1)*dx
                         ! The residual is the value of receiver-side reflection adjoint field
                         tr(h, 1) = ta(i, j)
+                        if (present(trefl)) then
+                            trefl(i, j, l) = ta(i, j)
+                        end if
                         h = h + 1
                     end if
                 end do
@@ -174,55 +191,87 @@ contains
     end subroutine adjoint_iso_reflection
 
     !
-    !> Fast sweeping factorized eikonal solver in 2D isotropic acoustic media
+    !> The receiver-side adjoint fields of the reflection legs at the points of
+    !> each reflector (zero elsewhere), driven by tresidual: the reflection
+    !> residuals, or the data weights of the misfit. tall(:, :, l + 1) is the
+    !> traveltime field of the reflected leg of reflector l and v its velocity.
+    !> It solves only these legs, one adjoint equation per reflector, and
+    !> applies the same median filter as adjoint_iso_reflection.
     !
-    subroutine image_iso(v, d, o, geom, tobs, refl)
+    subroutine adjoint_iso_reflection_at_reflector(v, d, o, geom, tall, refl, tresidual, trefl)
+
+        real, dimension(:, :), intent(in) :: v, refl
+        real, dimension(:, :, :), intent(in) :: tall
+        real, dimension(1:2), intent(in) :: d, o
+        type(source_receiver_geometry), intent(in) :: geom
+        real, dimension(:, :), intent(in) :: tresidual
+        real, dimension(:, :, :), allocatable, intent(out) :: trefl
+
+        real, allocatable, dimension(:, :) :: ta
+        integer :: nrefl, l
+
+        nrefl = nint(maxval(refl))
+        trefl = zeros(size(v, 1), size(v, 2), max(nrefl, 1))
+        do l = 1, nrefl
+            call adjoint_iso(v, d, o, geom, tall(:, :, l + 1), tresidual(:, l + 1:l + 1), ta)
+            ta = median_filt(ta)
+            where (nint(refl) == l)
+                trefl(:, :, l) = ta
+            end where
+        end do
+
+    end subroutine adjoint_iso_reflection_at_reflector
+
+    !
+    !> Image the reflectors of one shot in 2D isotropic acoustic media.
+    !>
+    !> With the source-side first-arrival time Ts, the receiver-side time Tr_r
+    !> of receiver r and its observed reflection traveltime tobs_r, the excess
+    !> time
+    !>     E(x) = Ts(x) - max_r [tobs_r - Tr_r(x)]
+    !>          = min_r [Ts(x) + Tr_r(x) - tobs_r]
+    !> is negative above a reflector and positive below it, so the reflector is
+    !> the zero crossing of E along z. The receiver-side term comes from one
+    !> eikonal solve (backpropagate_time). Where the receiver that attains the
+    !> minimum lies at an end of the receiver line, the zero set of E is
+    !> that receiver's isochron and not a reflector. Such a crossing lies
+    !> above the reflector, and the lower envelope over the shots removes it
+    !> (build_reflector).
+    !>
+    !> zidx(j, l) is the fractional 1-based z index of the first zero crossing
+    !> of reflector l in column j, or 0 where there is none.
+    !
+    subroutine image_iso(v, d, o, geom, tobs, zidx)
 
         real, dimension(:, :), intent(in) :: v
         real, dimension(1:2), intent(in) :: d, o
         type(source_receiver_geometry), intent(in) :: geom
         real, dimension(:, :), intent(in) :: tobs
-        real, allocatable, dimension(:, :, :), intent(out) :: refl
+        real, allocatable, dimension(:, :), intent(out) :: zidx
 
         type(source_receiver_geometry) :: sg
-        real, allocatable, dimension(:, :) :: ttf, ttr, img
-        real, allocatable, dimension(:, :) :: ttrec
-        integer :: i, l
-        integer :: n1, n2
-        real :: tmax
+        real, allocatable, dimension(:, :) :: ttf, ttr, ttrec
+        logical, allocatable, dimension(:) :: live
+        integer :: l, n2
 
-        ! Compute transmission traveltime
+        ! Source-side first-arrival time
         sg = geom
         call forward_iso(v, d, o, sg, ttf, ttrec)
 
-        n1 = size(v, 1)
         n2 = size(v, 2)
-        refl = zeros(n1, n2, nrefl)
+        zidx = zeros(n2, nrefl)
 
-        ! Compute reflection traveltime
         do l = 1, nrefl
 
-            sg = geom
-            sg%ns = sg%nr
-            deallocate(sg%srcr)
-            allocate(sg%srcr(1:sg%ns))
-            ! Eikonal solver won't solve negative values, so here to backpropagate
-            ! we have to first use the max of tobs to subtract tobs ...
-            tmax = maxval(tobs(:, l))
-            do i = 1, sg%ns
-                sg%srcr(i)%x = sg%recr(i)%x
-                sg%srcr(i)%y = 0
-                sg%srcr(i)%z = sg%recr(i)%z
-                sg%srcr(i)%t0 = tmax - tobs(i, l)
-            end do
-            call forward_iso(v, d, o, sg, ttr, ttrec)
-            ! ... and then get it back
-            ttr = tmax - ttr
-            ! Get image by finding thresholded match
-            img = rescale(abs(ttf - ttr), [0.0, 1.0])**4.0
-            img = binarize(img, reflector_imaging_threshold, [1.0, 0.0])
+            ! Receivers with reflection data
+            live = tobs(:, l) > 0
+            if (count(live) < 2) then
+                cycle
+            end if
 
-            refl(:, :, l) = img
+            ! Receiver-side time, and the first zero crossing of E in each column
+            call backpropagate_time(v, d, o, geom, tobs(:, l), live, ttr)
+            call zero_crossings(ttf - ttr, zidx(:, l))
 
             call warn(date_time_compact()//' Shot '//num2str(geom%id)//' reflector ' &
                 //num2str(l)//' imaging completed. ')
@@ -250,8 +299,9 @@ contains
         type(source_receiver_geometry) :: sg
         real, allocatable, dimension(:, :) :: ttp0, ttp, ttprec, tts, ttsrec
         integer :: nrefl, i, j, l, h, mx, mz
+        real :: zf, tf
 
-        nrefl = int(maxval(refl))
+        nrefl = nint(maxval(refl))
         tprec = zeros(geom%nr, nrefl + 1)
         tsrec = zeros(geom%nr, nrefl + 1)
         mz = size(vp, 1)
@@ -282,11 +332,13 @@ contains
             do j = 1, mx
                 do i = 1, mz
                     if (nint(refl(i, j)) == l) then
-                        sg%srcr(h)%z = o(2) + (i - 1)*dz
+                        ! The reflector FAT is with p, not s; the reflector lies refl - l
+                        ! grid cells below the grid point, or above it when negative
+                        call reflector_point(refl(i, j) - l, i, mz, ttp0(:, j), zf, tf)
+                        sg%srcr(h)%z = o(2) + zf*dz
                         sg%srcr(h)%y = 0
                         sg%srcr(h)%x = o(1) + (j - 1)*dx
-                        ! The reflector FAT is with p, not s
-                        sg%srcr(h)%t0 = ttp0(i, j)
+                        sg%srcr(h)%t0 = tf
                         h = h + 1
                     end if
                 end do
@@ -311,7 +363,8 @@ contains
     !
     !> @brife Compute adjoint field for TRTT in 2D isotropic elastic media
     !
-    subroutine adjoint_iso_reflection_elastic(vp, vs, d, o, geom, tpall, tsall, refl, tpresidual, tsresidual, tpadj, tsadj)
+    subroutine adjoint_iso_reflection_elastic(vp, vs, d, o, geom, tpall, tsall, refl, tpresidual, tsresidual, tpadj, tsadj, &
+            tprefl, tsrefl)
 
         real, dimension(:, :), intent(in) :: vp, vs, refl
         real, dimension(:, :, :), intent(in) :: tpall, tsall
@@ -319,17 +372,27 @@ contains
         type(source_receiver_geometry), intent(in) :: geom
         real, dimension(:, :), intent(in) :: tpresidual, tsresidual
         real, dimension(:, :, :), allocatable, intent(out) :: tpadj, tsadj
+        !> The receiver-side adjoint fields of the reflected legs at the points
+        !> of each reflector, zero elsewhere: tprefl of the same-wave
+        !> reflection (velocity vp) and tsrefl of the converted one (velocity vs)
+        real, dimension(:, :, :), allocatable, intent(out), optional :: tprefl, tsrefl
 
         type(source_receiver_geometry) :: sg
         real, allocatable, dimension(:, :) :: tpa, tsa, tr
         integer :: nrefl, i, j, l, h, mx, mz
         integer :: mf = 10
 
-        nrefl = int(maxval(refl))
+        nrefl = nint(maxval(refl))
         mz = size(vp, 1)
         mx = size(vs, 2)
         tpadj = zeros(mz, mx, nrefl + 1)
         tsadj = zeros(mz, mx, nrefl + 1)
+        if (present(tprefl)) then
+            tprefl = zeros(mz, mx, max(nrefl, 1))
+        end if
+        if (present(tsrefl)) then
+            tsrefl = zeros(mz, mx, max(nrefl, 1))
+        end if
 
         ! Compute receiver-side transmission adjoint field
         sg = geom
@@ -368,6 +431,9 @@ contains
                         sg%recr(h)%x = o(1) + (j - 1)*dx
                         ! The residual is the value of receiver-side reflection adjoint field
                         tr(h, 1) = tpa(i, j)
+                        if (present(tprefl)) then
+                            tprefl(i, j, l) = tpa(i, j)
+                        end if
                         h = h + 1
                     end if
                 end do
@@ -385,6 +451,11 @@ contains
             call adjoint_iso(vs, d, o, sg, tsall(:, :, l + 1), tsresidual(:, l + 1:l + 1), tsa)
             tsa = median_filt(tsa)
             tsadj(:, :, l + 1) = tsa
+            if (present(tsrefl)) then
+                where (nint(refl) == l)
+                    tsrefl(:, :, l) = tsa
+                end where
+            end if
 
             !            ! Source-side reflection adjoint field -- for vp
             !            ! Allocate a much longer array, because along z, a refletor can quasi-vertical,
@@ -422,71 +493,62 @@ contains
     end subroutine adjoint_iso_reflection_elastic
 
     !
-    !> Fast sweeping factorized eikonal solver in 2D isotropic elastic media
+    !> Image the reflectors of one shot in 2D isotropic elastic media. vp is
+    !> the velocity of the incident wave and of the reflected leg of the
+    !> same-wave reflections tpobs, and vs that of the reflected leg of the
+    !> converted reflections tsobs: PP and PS for an incident P wave, or, with
+    !> vp and vs swapped by the caller, SS and SP for an incident S wave. Each
+    !> data set gives a zero crossing (see image_iso), and a column takes their
+    !> mean where both exist, otherwise the one that exists.
     !
-    subroutine image_iso_elastic(vp, vs, d, o, geom, tpobs, tsobs, refl)
+    subroutine image_iso_elastic(vp, vs, d, o, geom, tpobs, tsobs, zidx)
 
         real, dimension(:, :), intent(in) :: vp, vs
         real, dimension(1:2), intent(in) :: d, o
         type(source_receiver_geometry), intent(in) :: geom
         real, dimension(:, :), intent(in) :: tpobs, tsobs
-        real, allocatable, dimension(:, :, :), intent(out) :: refl
+        real, allocatable, dimension(:, :), intent(out) :: zidx
 
         type(source_receiver_geometry) :: sg
-        real, allocatable, dimension(:, :) :: ttf, ttr, imgp, imgs
-        real, allocatable, dimension(:, :) :: ttrec
-        integer :: i, l
-        integer :: n1, n2
-        real :: tmax
+        real, allocatable, dimension(:, :) :: ttf, ttr, ttrec
+        real, allocatable, dimension(:) :: zp, zs
+        logical, allocatable, dimension(:) :: live
+        integer :: l, n2
 
-        ! Compute transmission traveltime -- for p
+        ! Source-side first-arrival time of the incident wave
         sg = geom
         call forward_iso(vp, d, o, sg, ttf, ttrec)
 
-        n1 = size(vp, 1)
         n2 = size(vp, 2)
-        refl = zeros(n1, n2, nrefl)
+        zidx = zeros(n2, nrefl)
+        zp = zeros(n2)
+        zs = zeros(n2)
 
-        ! Compute reflection traveltime -- for p and s
         do l = 1, nrefl
 
-            sg = geom
-            sg%ns = sg%nr
-            deallocate(sg%srcr)
-            allocate(sg%srcr(1:sg%ns))
-            ! Eikonal solver won't solve negative values, so here to backpropagate
-            ! we have to first use the max of tobs to subtract tobs ...
-            tmax = maxval(tpobs(:, l))
-            do i = 1, sg%ns
-                sg%srcr(i)%x = sg%recr(i)%x
-                sg%srcr(i)%y = 0
-                sg%srcr(i)%z = sg%recr(i)%z
-                sg%srcr(i)%t0 = tmax - tpobs(i, l)
-            end do
-            call forward_iso(vp, d, o, sg, ttr, ttrec)
-            ! ... and then get it back
-            ttr = tmax - ttr
-            ! Get image by finding thresholded match
-            imgp = rescale(abs(ttf - ttr), [0.0, 1.0])**4.0
-            imgp = binarize(imgp, reflector_imaging_threshold, [1.0, 0.0])
+            ! Same-wave reflections
+            live = tpobs(:, l) > 0
+            zp = 0.0
+            if (count(live) >= 2) then
+                call backpropagate_time(vp, d, o, geom, tpobs(:, l), live, ttr)
+                call zero_crossings(ttf - ttr, zp)
+            end if
 
-            ! Eikonal solver won't solve negative values, so here to backpropagate
-            ! we have to first use the max of tobs to subtract tobs ...
-            tmax = maxval(tsobs(:, l))
-            do i = 1, sg%ns
-                sg%srcr(i)%x = sg%recr(i)%x
-                sg%srcr(i)%y = 0
-                sg%srcr(i)%z = sg%recr(i)%z
-                sg%srcr(i)%t0 = tmax - tsobs(i, l)
-            end do
-            call forward_iso(vs, d, o, sg, ttr, ttrec)
-            ! ... and then get it back
-            ttr = tmax - ttr
-            ! Get image by finding thresholded match
-            imgs = rescale(abs(ttf - ttr), [0.0, 1.0])**4.0
-            imgs = binarize(imgs, reflector_imaging_threshold, [1.0, 0.0])
+            ! Converted reflections
+            live = tsobs(:, l) > 0
+            zs = 0.0
+            if (count(live) >= 2) then
+                call backpropagate_time(vs, d, o, geom, tsobs(:, l), live, ttr)
+                call zero_crossings(ttf - ttr, zs)
+            end if
 
-            refl(:, :, l) = imgp + imgs
+            where (zp > 0 .and. zs > 0)
+                zidx(:, l) = 0.5*(zp + zs)
+            elsewhere (zp > 0)
+                zidx(:, l) = zp
+            elsewhere
+                zidx(:, l) = zs
+            end where
 
             call warn(date_time_compact()//' Shot '//num2str(geom%id)//' reflector ' &
                 //num2str(l)//' imaging completed. ')
@@ -494,5 +556,105 @@ contains
         end do
 
     end subroutine image_iso_elastic
+
+    !===============================================================
+    ! Reflector helpers
+    !
+
+    !
+    !> Position and start time of a reflector point. The point is stored at
+    !> grid row i with the fractional offset dfrac in [-0.5, 0.5) in grid cells;
+    !> zf is its z index (0-based, fractional) and tf the source-side time
+    !> interpolated at that depth from the column tcol. With dfrac = 0, the
+    !> point is the grid point itself and tf = tcol(i).
+    !
+    subroutine reflector_point(dfrac, i, mz, tcol, zf, tf)
+
+        real, intent(in) :: dfrac
+        integer, intent(in) :: i, mz
+        real, dimension(:), intent(in) :: tcol
+        real, intent(out) :: zf, tf
+
+        integer :: k
+        real :: w
+
+        zf = i - 1 + dfrac
+        zf = min(max(zf, 0.0), mz - 1.0)
+        k = floor(zf) + 1
+        if (k >= mz) then
+            tf = tcol(mz)
+        else
+            w = zf - (k - 1)
+            tf = (1.0 - w)*tcol(k) + w*tcol(k + 1)
+        end if
+
+    end subroutine reflector_point
+
+    !
+    !> Receiver-side time ttr(x) = max_r [tobs_r - Tr_r(x)] over the receivers
+    !> in mask, from one eikonal solve with these receivers as source points
+    !> that start at tmax - tobs_r, where tmax is the largest tobs_r of these
+    !> receivers
+    !
+    subroutine backpropagate_time(v, d, o, geom, tobs, mask, ttr)
+
+        real, dimension(:, :), intent(in) :: v
+        real, dimension(1:2), intent(in) :: d, o
+        type(source_receiver_geometry), intent(in) :: geom
+        real, dimension(:), intent(in) :: tobs
+        logical, dimension(:), intent(in) :: mask
+        real, allocatable, dimension(:, :), intent(out) :: ttr
+
+        type(source_receiver_geometry) :: sg
+        real, allocatable, dimension(:, :) :: ttrec
+        integer :: i, h
+        real :: tmax
+
+        sg = geom
+        sg%ns = count(mask)
+        deallocate(sg%srcr)
+        allocate(sg%srcr(1:sg%ns))
+        ! The eikonal solver takes nonnegative start times
+        tmax = maxval(tobs, mask=mask)
+        h = 1
+        do i = 1, geom%nr
+            if (mask(i)) then
+                sg%srcr(h)%x = geom%recr(i)%x
+                sg%srcr(h)%y = 0
+                sg%srcr(h)%z = geom%recr(i)%z
+                sg%srcr(h)%t0 = tmax - tobs(i)
+                h = h + 1
+            end if
+        end do
+        call forward_iso(v, d, o, sg, ttr, ttrec)
+        ttr = tmax - ttr
+
+    end subroutine backpropagate_time
+
+    !
+    !> The first zero crossing of e from negative to positive along z in each
+    !> column, as a fractional 1-based index by linear interpolation, or 0
+    !> without one
+    !
+    subroutine zero_crossings(e, z)
+
+        real, dimension(:, :), intent(in) :: e
+        real, dimension(:), intent(out) :: z
+
+        integer :: i, j
+
+        z = 0.0
+        !$omp parallel do private(i, j)
+        do j = 1, size(e, 2)
+            do i = 1, size(e, 1) - 1
+                if (e(i, j) < 0 .and. e(i + 1, j) >= 0) then
+                    z(j) = i + e(i, j)/(e(i, j) - e(i + 1, j))
+                    exit
+                end if
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine zero_crossings
 
 end module traveltime_iso_reflection

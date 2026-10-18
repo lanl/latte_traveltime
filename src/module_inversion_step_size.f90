@@ -194,6 +194,16 @@ contains
 
         do i = 1, nmodel
 
+            ! The reflectors change only in the joint update of their depths
+            ! (step_max_refl > 0): row l of the search direction holds the depth
+            ! change of reflector l by column
+            if (model_m(i)%name == 'refl') then
+                if (model_step(i) /= 0) then
+                    call move_reflector(model_m(i)%array, model_step(i)*model_srch(i)%array*step)
+                end if
+                cycle
+            end if
+
             model_m(i)%array = model_m(i)%array + model_step(i)*model_srch(i)%array*step
 
             ! Box-clip model
@@ -203,11 +213,6 @@ contains
                 end where
             else
                 model_m(i)%array = clip(model_m(i)%array, model_min(i), model_max(i))
-            end if
-
-            ! For TRTT, the search direction is the reflector's image
-            if (model_m(i)%name == 'refl') then
-                model_m(i)%array = model_srch(i)%array
             end if
 
         end do
@@ -252,7 +257,9 @@ contains
                 case ('c', 'C')
                     valstep = 1.0e9
                 case ('refl')
-                    valstep = 1.0
+                    ! Largest change of a reflector depth in the joint update; zero
+                    ! leaves the reflectors to imaging and refinement
+                    valstep = 0.0
                 case ('sx')
                     valstep = 0.1*(nx - 1)*dx
                 case ('sy')

@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -616,7 +616,7 @@ contains
     !
     !> Compute travletime misfit for a gather
     !
-    subroutine compute_shot_misfit(ishot, dir_field, label, ttp_syn, ttp_obs, ttp_residual, m, tsyn_all, tobs_all)
+    subroutine compute_shot_misfit(ishot, dir_field, label, ttp_syn, ttp_obs, ttp_residual, m, tsyn_all, tobs_all, weight_used)
 
         !> Source index
         integer, intent(in) :: ishot
@@ -635,10 +635,12 @@ contains
         real, intent(inout) :: m
         !> Nonzero source initiation time
         real, dimension(:, :), intent(in), optional :: tsyn_all, tobs_all
+        !> The weight of each datum in the misfit
+        real, allocatable, dimension(:, :), intent(out), optional :: weight_used
 
         real, allocatable, dimension(:, :) :: weight, ttp_misfit
         integer :: i, j
-        real :: d
+        real :: d, omin, omax
 
         if (yn_dd_no_st0) then
 
@@ -702,30 +704,31 @@ contains
                     weight(i, j) = 0
                 end if
 
-                ! For reflection data
-                if (j > 1 .and. (gmtr(ishot)%recr(i)%aoff < offset_min_refl &
-                        .or. gmtr(ishot)%recr(i)%aoff > offset_max_refl)) then
-                    weight(i, j) = 0
-                end if
-
             end do
         end do
         !$omp end parallel do
+
+        ! For the reflection data of trtt, zero the weights outside the offset
+        ! range in use (reflection_offset_range), which depends on whether the
+        ! reflectors are being imaged or refined
+        if (which_program == 'trtt') then
+            call reflection_offset_range(omin, omax)
+            do i = 1, gmtr(ishot)%nr
+                if (gmtr(ishot)%recr(i)%aoff < omin .or. gmtr(ishot)%recr(i)%aoff > omax) then
+                    weight(i, 2:) = 0
+                end if
+            end do
+        end if
+
+        if (present(weight_used)) then
+            weight_used = weight
+        end if
 
         ! Compute loss
         m = m + sum(ttp_misfit*weight)
 
         ! Output
         ttp_residual = ttp_residual*weight
-
-        ! For reflector image computation, zero out traces if necessary, but cannot multiply non-(0, 1) weights
-        ! because this is real observation for reflector image computation
-        ! For first-arrival-only data, this will not execute
-        do j = 2, size(ttp_residual, 2)
-            where (weight(:, j) == 0)
-                ttp_obs(:, j) = ttp_obs(:, j)*weight(:, j)
-            end where
-        end do
 
     end subroutine compute_shot_misfit
 

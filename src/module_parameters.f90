@@ -107,6 +107,11 @@ module parameters
     real :: offset_max = float_huge
     real :: offset_min_refl = 0.0d0
     real :: offset_max_refl = float_huge
+    ! Largest offset of the reflections that set the reflector depths, in the
+    ! imaging, the refinement and the image guard of TRTT, and whether these
+    ! are running, so that the reflection misfit uses this offset
+    real :: offset_max_refl_depth = float_huge
+    logical :: yn_refl_depth_offsets = .false.
 
     ! source id
     integer :: sid_min = 1
@@ -145,6 +150,7 @@ module parameters
     logical :: verbose
     integer :: sweep_niter_max = 10
     real :: sweep_stop_threshold = 1.0e-4
+    character(len=12) :: adjoint_receiver = 'nearest'
     real :: misfit_threshold
 
     character(len=1024) :: file_andfaux, file_andfcoh
@@ -176,8 +182,7 @@ module parameters
     character(len=32) :: data_prefix = 'traveltime'
 
     integer :: nrefl = 0
-    real :: reflector_imaging_threshold = 1.0e-9
-    logical :: yn_update_reflector
+    logical :: yn_update_reflector = .false.
     logical :: yn_precond = .true.
 
     character(len=12) :: incident_wave = 'p'
@@ -374,6 +379,11 @@ contains
         call readpar_logical(file_parameter, 'verbose', verbose, .false.)
         call readpar_float(file_parameter, 'sweep_stop_threshold', sweep_stop_threshold, 1.0e-4)
         call readpar_int(file_parameter, 'sweep_niter_max', sweep_niter_max, 10)
+        ! How FATT injects the traveltime residuals at the receivers into the
+        ! adjoint-state equation; TRTT and TLOC always use nearest
+        call readpar_string(file_parameter, 'adjoint_receiver', adjoint_receiver, 'nearest')
+        call assert(any_in([adjoint_receiver], ['nearest', 'linear']), &
+            ' <read_parameters> Error: adjoint_receiver must be one of nearest, linear')
 
         call readpar_string(file_parameter, 'file_data_misfit', file_datamisfit, tidy(dir_working)//'/data_misfit.txt')
         call readpar_string(file_parameter, 'file_shot_misfit', file_shotmisfit, tidy(dir_working)//'/shot_misfit.bin')
@@ -451,7 +461,6 @@ contains
         ndata = size(data_name)
 
         if (which_program == 'trtt') then
-            call readpar_float(file_parameter, 'reflector_imaging_threshold', reflector_imaging_threshold, 1.0e-9)
             call readpar_int(file_parameter, 'nrefl', nrefl, 1)
             call readpar_nfloat(file_parameter, 'misfit_weight', misfit_weight, ones(nrefl + 1))
             call assert(size(misfit_weight) == nrefl + 1, ' <read_parameter> Error: size(misfit_weight) must be nrefl + 1. Exiting. ')
@@ -460,6 +469,7 @@ contains
             end if
             call readpar_float(file_parameter, 'offset_min_refl', offset_min_refl, 0.0)
             call readpar_float(file_parameter, 'offset_max_refl', offset_max_refl, float_huge)
+            call readpar_float(file_parameter, 'offset_max_refl_depth', offset_max_refl_depth, offset_max_refl)
         else
             call readpar_nfloat(file_parameter, 'misfit_weight', misfit_weight, ones(1))
         end if
@@ -942,5 +952,23 @@ contains
         y = norm2([s%x, s%y, s%z] - [r%x, r%y, r%z]) <= threshold
 
     end function source_receiver_coincide
+
+    !
+    !> The offset range of the reflection data in use. While TRTT images or
+    !> refines the reflectors, the largest offset is offset_max_refl_depth,
+    !> within offset_max_refl.
+    !
+    subroutine reflection_offset_range(omin, omax)
+
+        real, intent(out) :: omin, omax
+
+        omin = offset_min_refl
+        if (yn_refl_depth_offsets) then
+            omax = min(offset_max_refl_depth, offset_max_refl)
+        else
+            omax = offset_max_refl
+        end if
+
+    end subroutine reflection_offset_range
 
 end module parameters

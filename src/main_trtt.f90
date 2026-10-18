@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -27,13 +27,6 @@ program main
     use inversion_step_size
 
     implicit none
-
-#ifdef dim2
-    type(meta_array2_real) :: m
-#endif
-#ifdef dim3
-    type(meta_array3_real) :: m
-#endif
 
     which_program = 'trtt'
 
@@ -102,12 +95,10 @@ program main
         ! Make update directories
         call make_iter_dir
 
-        ! Update reflector image
-        if (iter == 1 .and. any_in(['refl'], model_name)) then
-            m = get_meta_array(model_m, 'refl')
-            if (maxval(abs(m%array)) == 0) then
-                call compute_reflector_image
-            end if
+        ! Update the reflectors for the current velocity models: image them
+        ! when required and refine their depths by least squares
+        if (yn_update_reflector) then
+            call update_reflector_image
         end if
 
         ! Compute gradients

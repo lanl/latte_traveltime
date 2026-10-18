@@ -16,6 +16,8 @@ Each program has a 2-D executable (suffix `2`) and a 3-D executable (suffix `3`)
 | trtt | `x_trtt2`, `x_trtt3` | Joint transmission-reflection traveltime tomography |
 | tloc | `x_tloc2`, `x_tloc3` | Source location, optionally joint with tomography |
 
+A build with `use_cuda = on` also makes CUDA versions of the 3-D executables, `x_eikonal3_cuda`, `x_fatt3_cuda`, `x_trtt3_cuda` and `x_tloc3_cuda`, which take the same parameter files (see below).
+
 ---
 
 ## Parameter File Syntax
@@ -90,7 +92,7 @@ The original grid describes the model files on disk. A model file is a raw littl
 | `zmin` | float | Lower z bound | `ooz` | no |
 | `zmax` | float | Upper z bound | `ooz + (nnz - 1)*ddz` | no |
 
-LATTE builds the computational grid from the target spacing and these bounds: `ox = xmin` and `nx = nint((xmax - xmin)/ddx) + 1`, and likewise in y and z. When this grid differs from the original grid, LATTE interpolates every model file onto it. The interpolation is linear, except for `refl`, which takes the nearest grid point. LATTE drops sources and receivers outside the bounds. Output models, such as gradients and updated models, live on the computational grid.
+LATTE builds the computational grid from the target spacing and these bounds: `ox = xmin` and `nx = nint((xmax - xmin)/ddx) + 1`, and likewise in y and z. When this grid differs from the original grid, LATTE interpolates every model file onto it. The interpolation is linear, except for `refl`, which takes the nearest grid point and keeps its values, including the offsets of the reflector points in grid cells, so give `refl` on the computational grid. LATTE drops sources and receivers outside the bounds. Output models, such as gradients and updated models, live on the computational grid.
 
 ---
 
@@ -184,7 +186,7 @@ With `yn_exchange_sr` in eikonal, the output follows the exchanged geometry: one
 |------|----------|---------|
 | `vp` | all | P velocity |
 | `vs` | all, `elastic-iso` | S velocity |
-| `refl` | eikonal, trtt | Reflector labels: value `l` marks the grid points of reflector `l` (1, 2, ...), and `0` marks all other points |
+| `refl` | eikonal, trtt | Reflector labels: reflector `l` (1, 2, ...) occupies one grid point per column, with the value `l + f`, where `f` in [-0.5, 0.5) is the offset of the reflector from that grid point in grid cells, positive downward. An integer value puts the reflector on the grid point, and `0` marks all other points |
 | `sx`, `sy`, `sz` | tloc | Source coordinates, one float32 value per shot (`sy` in 3-D) |
 | `st0` | tloc | Source origin times, one float32 value per shot |
 
@@ -205,6 +207,8 @@ In tloc, the starting source coordinates and origin times of the inverted parame
 | `sweep_stop_threshold` | float | Stop sweeping when the mean absolute change between two iterations falls below this value | `1.0e-4` | no |
 | `snaps` | float list | eikonal: when the sum of the values is positive, save each shot's full traveltime field to `dir_snapshot`; the values themselves play no other role | `-1.0` | no |
 | `verbose` | logical | Print the grid range of each shot | `.false.` | no |
+
+With `use_cuda = on` (see `src/3d/Makefile`), the build adds the CUDA executables `x_eikonal3_cuda`, `x_fatt3_cuda`, `x_trtt3_cuda` and `x_tloc3_cuda`. They take the same parameter files as `x_eikonal3`, `x_fatt3`, `x_trtt3` and `x_tloc3`, which stay CPU-only, and run the fast-sweeping iterations on a GPU. The GPU runs the same iterations as the CPU, so traveltimes, adjoint fields and gradients are the same to the last bit. The rest of each solve, e.g., the background time field and the receiver traveltimes, stays on the CPU and uses OpenMP. Each MPI rank selects GPU `r mod n`, where `n` is the number of GPUs it can see and `r` is the rank's index on its node, from the first of the variables `MPI_LOCALRANKID`, `OMPI_COMM_WORLD_LOCAL_RANK`, `MV2_COMM_WORLD_LOCAL_RANK`, `PMI_LOCAL_RANK`, `PALS_LOCAL_RANKID` and `SLURM_LOCALID` that the MPI launcher or Slurm sets. Without any of them, every rank uses GPU 0. A GPU solve needs about 57 bytes of GPU memory per grid point of the shot's grid, e.g., 1.1 GB for 402 × 402 × 122 points, and every rank on a GPU keeps its own copy between solves. Ranks that share a GPU take turns on it, so one to a few ranks per GPU are enough. A rank without a GPU, or whose GPU runs out of memory, solves on the CPU and prints a warning.
 
 eikonal writes `shot_<id>_traveltime_p.bin`, and for `elastic-iso` also `shot_<id>_traveltime_s.bin`, to `dir_synthetic`. Each file holds float32 traveltimes, one per receiver in shot-file order. With a `refl` model, a file holds `nrefl + 1` columns, with the receiver index running fastest. The first column holds first arrivals, and column `l + 1` holds the reflection traveltimes of reflector `l`, where `nrefl` is the largest label in `refl`. For `elastic-iso` with `incident_wave = p`, the `_p` file holds P first arrivals and PP reflections. The `_s` file holds a zero first column and PS reflections. With `incident_wave = s`, the `_s` file holds S first arrivals and SS reflections, and the `_p` file holds a zero first column and SP reflections. A snapshot file holds one traveltime field per column of the data file. The fields cover the computational grid, or the shot's subvolume when the adaptive model range is on.
 
@@ -243,10 +247,29 @@ The taper removes the sharp edges where a shot's gradient ends inside the model.
 | `yn_continue` | logical | Resume after the last iteration recorded in `file_data_misfit`; without that file, start from `resume_from_iter` | `.false.` | no |
 | `resume_from_iter` | integer | Iteration to start from when `yn_continue` is false or `file_data_misfit` does not exist; LATTE reads the `updated_<name>.bin` files of the previous iteration | `1` | no |
 | `yn_flat_stop` | logical | Stop when three successive iterations give the same misfit | `.false.` | no |
+| `adjoint_receiver` | string | fatt: how the traveltime residuals at the receivers enter the adjoint-state equation, `nearest` (a Dirichlet condition at the nearest grid points) or `linear` (true adjoint sources at the receiver locations); see [below](#dirichlet-condition-or-adjoint-source). trtt and tloc always use `nearest` | `nearest` | no |
 
 When three successive iterations give the same misfit and `yn_flat_stop` is false, LATTE halves every `step_max_<name>` and raises the default `jumpout_factor` to 1.05 for the remaining iterations.
 
 In tloc with `misfit_type = dd` and without `st0` in `model_update`, LATTE differences the traveltimes of each source between receivers, which removes the unknown origin times.
+
+### Dirichlet condition or adjoint source
+
+FATT minimizes $J = \frac{1}{2} \sum_r \Delta t_r^2$, where $\Delta t_r = T(\mathbf{x}_r) - t_r^{\mathrm{obs}}$ is the traveltime residual at receiver $r$, $\mathbf{x}_r$ is the receiver location, $T$ is the computed first-arrival traveltime and $t_r^{\mathrm{obs}}$ is the observed one. The gradient with respect to the velocity $v$ is $\partial J / \partial v = -\lambda / v^3$, where the adjoint field $\lambda$ solves $-\nabla \cdot (\lambda \nabla T) = 0$ away from the receivers. `adjoint_receiver` sets how the residuals enter this equation.
+
+`nearest` imposes the residuals as a Dirichlet boundary condition. LATTE fixes $\lambda = \Delta t_r$ at the grid point nearest to receiver $r$, or the sum of the residuals if several receivers share the grid point. Compared with the adjoint sources below, this places each receiver at a grid point and weights it by about $\Delta x / v_r$, where $\Delta x$ is the grid spacing and $v_r$ is the velocity at the receiver.
+
+`linear` injects the residuals as true adjoint sources, i.e., as the source term of the adjoint-state equation
+
+$$-\nabla \cdot (\lambda \nabla T) = \sum_r \Delta t_r \, \delta(\mathbf{x} - \mathbf{x}_r),$$
+
+where $\delta$ is the Dirac delta. LATTE adds the discrete source
+
+$$q_k = \frac{1}{\Delta x \, \Delta z} \sum_r w_{rk} \, \Delta t_r$$
+
+at grid point $k$, where $w_{rk}$ is the bilinear weight with which the forward solver interpolates the traveltime of receiver $r$ from grid point $k$. For a receiver at $(x_r, z_r)$ in the cell $x_i \le x \le x_i + \Delta x$, $z_j \le z \le z_j + \Delta z$, let $a = (x_r - x_i)/\Delta x$ and $b = (z_r - z_j)/\Delta z$. The corners $(x_i, z_j)$, $(x_i + \Delta x, z_j)$, $(x_i, z_j + \Delta z)$ and $(x_i + \Delta x, z_j + \Delta z)$ have the weights $(1-a)(1-b)$, $a(1-b)$, $(1-a)b$ and $ab$, and all other grid points have zero weight. The division by the cell area $\Delta x \, \Delta z$ makes the discrete Dirac delta integrate to one. In 3-D, trilinear weights and the cell volume take their place. The gradient then follows the true receiver locations, and its amplitude does not depend on the grid spacing.
+
+The default preconditioner (`yn_precond`) computes the illumination with the same setting, so this weight largely cancels, and the two settings give close final models in our tests. The default `nearest` reproduces the results of earlier versions of LATTE. [example/fatt_adjoint_interpolation](../example/fatt_adjoint_interpolation) compares both settings with finite-difference gradients.
 
 ---
 
@@ -256,11 +279,11 @@ For each parameter `<name>` in `model_update`:
 
 | Parameter | Type | Description | Default | Required |
 |-----------|------|-------------|---------|----------|
-| `min_<name>` | float | Lower bound, applied after each update | `vp`, `vs`, `refl`, `st0`: `0.0`; `sx`: `ox`; `sy`: `oy`; `sz`: `oz` | no |
-| `max_<name>` | float | Upper bound, applied after each update | `vp`, `vs`: `1.0e5`; `refl`: `1.0e9`; `sx`: `ox + (nx - 1)*dx`, and likewise for `sy` and `sz`; `st0`: `1.0e6` | no |
-| `step_max_<name>` | float (iter) | Largest change of `<name>` in one update | `vp`, `vs`: `100.0`; `sx`: `0.1*(nx - 1)*dx`, and likewise for `sy` and `sz`; `st0`: `0.1`; `refl`: `1.0` | no |
+| `min_<name>` | float | Lower bound, applied after each update | `vp`, `vs`, `st0`: `0.0`; `sx`: `ox`; `sy`: `oy`; `sz`: `oz` | no |
+| `max_<name>` | float | Upper bound, applied after each update | `vp`, `vs`: `1.0e5`; `sx`: `ox + (nx - 1)*dx`, and likewise for `sy` and `sz`; `st0`: `1.0e6` | no |
+| `step_max_<name>` | float (iter) | Largest change of `<name>` in one update | `vp`, `vs`: `100.0`; `sx`: `0.1*(nx - 1)*dx`, and likewise for `sy` and `sz`; `st0`: `0.1`; `refl`: `0.0` (see TRTT-specific) | no |
 
-LATTE does not apply the bounds of `vp` and `vs` at points where the updated value is zero. A zero-velocity region stays zero only when the search direction vanishes there. To keep such a region fixed, mask the gradient with `process_grad = mask` and `grad_mask`.
+The bounds do not apply to `refl`; `reflector_<n>_depth_min` and `reflector_<n>_depth_max` bound the depths of the reflectors. LATTE does not apply the bounds of `vp` and `vs` at points where the updated value is zero. A zero-velocity region stays zero only when the search direction vanishes there. To keep such a region fixed, mask the gradient with `process_grad = mask` and `grad_mask`.
 
 ---
 
@@ -305,15 +328,24 @@ When `yn_precond` is false, LATTE divides the adjoint field by v³, where v is t
 | `nrefl` | integer | Number of reflectors. The observed data files hold `nrefl + 1` columns, and LATTE ignores `refl` labels above `nrefl` | `1` | no |
 | `offset_min_refl` | float | Give zero weight to reflection data with offsets below this value | `0.0` | no |
 | `offset_max_refl` | float | Give zero weight to reflection data with offsets above this value | `+∞` | no |
-| `reflector_imaging_threshold` | float | Reflector imaging marks a grid point as a reflector point when the normalized mismatch between the source-side and receiver-side traveltimes, raised to the fourth power, is below this value | `1.0e-9` | no |
-| `reflector_<n>_taper_length` | float (iter) | 2-D: length at each lateral end that LATTE excludes when it fits reflector `n`; must be below `nx*dx/3` | `10*dx` | no |
-| `reflector_<n>_smooth_window` | float (iter) | 2-D: LOWESS window for smoothing reflector `n` | `0.2*(nx*dx - 2*taper)` | no |
+| `offset_max_refl_depth` | float | Largest offset of the reflection data that image and refine the reflectors, at most `offset_max_refl`; the velocity update uses the offsets up to `offset_max_refl` | `offset_max_refl` | no |
+| `yn_refl_image` | logical (iter) | Image the reflectors at the start of the iteration | `.true.` | no |
+| `refl_refine_niter` | integer (iter) | Gauss-Newton steps that refine the reflector depths in each iteration; `0` disables the refinement | `2` | no |
+| `refl_refine_step_max` | float (iter) | Largest depth change of one refinement step | `5*dz` | no |
+| `refl_refine_smooth` | float (iter) | Gaussian smoothing length of the depth change along a reflector, in the refinement and in the joint update; `0` disables the smoothing | `5*dx` | no |
+| `step_max_refl` | float (iter) | Largest depth change of a reflector in the joint update with the velocities; `0` disables the joint update | `0.0` | no |
+| `reflector_<n>_taper_length` | float (iter) | 2-D: length at each lateral end that the LOWESS fit of reflector `n` excludes | `10*dx` | no |
+| `reflector_<n>_smooth_window` | float (iter) | 2-D: LOWESS window for smoothing the image of reflector `n`; `0` disables it | `0.0` | no |
 | `reflector_<n>_depth_min` | float (iter) | Shallowest depth of reflector `n` | `oz` | no |
 | `reflector_<n>_depth_max` | float (iter) | Deepest depth of reflector `n` | `oz + (nz - 1)*dz` | no |
 
-The reflector index `<n>` starts at 1. The `reflector_<n>_*` parameters apply only when `refl` is in `model_update`. In 3-D, the taper and window parameters have x and y versions: `reflector_<n>_taper_length_x`, `reflector_<n>_taper_length_y`, `reflector_<n>_smooth_window_x` and `reflector_<n>_smooth_window_y`.
+The reflector index `<n>` starts at 1. The `reflector_<n>_*` parameters apply only when `refl` is in `model_update`. In 3-D, the taper and window parameters have x and y versions: `reflector_<n>_taper_length_x`, `reflector_<n>_taper_length_y`, `reflector_<n>_smooth_window_x` and `reflector_<n>_smooth_window_y`, and the window smooths only when both are positive.
 
-When the starting `refl` model is all zero, trtt first images the reflectors from the observed reflection traveltimes. LATTE processes reflector images with the lists `process_shot_refl` and `process_refl`. These lists take the steps of gradient processing, with parameter names that use `refl` in place of `grad`, for example `refl_smoothx`.
+With `refl` in `model_update`, trtt updates the reflectors at the start of every iteration, before the velocity gradient. A shot images a reflector where the excess time E = Ts - max(tobs - Tr) changes sign with depth. Here Ts is the source-side and Tr the receiver-side traveltime, tobs the observed reflection traveltime, and the maximum runs over the receivers. Over the shots, each column takes the median of the crossings within half a grid cell of the deepest one. A reflector that no shot images keeps its previous depths, and trtt stops with an error when there are none. The image replaces a nonzero reflector model only when it does not raise the data misfit. Then `refl_refine_niter` Gauss-Newton steps move each reflector to the depths that fit the reflection traveltimes best in the current velocity model. trtt halves a step, at most twice, until it lowers the data misfit; otherwise, it drops the step and ends the refinement. With `yn_refl_image = 1:y, 2:n`, trtt images the reflectors in the first iteration only. With `yn_refl_image = n`, it refines the starting reflector model, which must hold every reflector.
+
+With `step_max_refl > 0`, the reflector depths also take part in the joint update with the velocities. Their search direction is the Gauss-Newton depth change from the reflection data up to `offset_max_refl`. `refl` always uses the steepest-descent search method.
+
+In an approximate velocity model, the far offsets image a shallow reflector too deep, because their traveltimes are the most sensitive to the velocity. When the offsets exceed about three times the depth of the shallowest reflector, set `offset_max_refl_depth` to one to two times that depth. The reflectors then follow the near offsets, while the velocity update uses all offsets.
 
 ---
 
@@ -427,14 +459,14 @@ The method `ml` rasterizes the current source positions and predicts a fault pro
 
 ## Gradient Processing
 
-LATTE processes gradients in two stages. `process_shot_grad` lists the steps for each shot's gradient before stacking, and `process_grad` lists the steps for the stacked gradient. The steps run in the listed order. By default, the same lists apply to every updated model parameter, and `uniform_processing` switches to separate lists for each parameter. LATTE does not process the gradients of `sx`, `sy`, `sz` and `st0`.
+LATTE processes gradients in two stages. `process_shot_grad` lists the steps for each shot's gradient before stacking, and `process_grad` lists the steps for the stacked gradient. The steps run in the listed order. By default, the same lists apply to every updated model parameter, and `uniform_processing` switches to separate lists for each parameter. LATTE does not process the gradients of `sx`, `sy`, `sz`, `st0` and `refl`.
 
 | Parameter | Type | Description | Default | Required |
 |-----------|------|-------------|---------|----------|
 | `process_shot_grad` | string list | Steps for each shot's gradient | none | no |
 | `process_grad` | string list | Steps for the stacked gradient | none | no |
 | `uniform_processing` | logical | Use `process_shot_grad` and `process_grad` for all parameters. When false, each parameter `<name>` uses its own lists, `process_shot_grad_<name>` and `process_grad_<name>`, and its step parameters carry the same infix, for example `shot_grad_vp_smoothx` and `grad_vp_smoothx` | `.true.` | no |
-| `<name>_update_iter` | integer list | Update parameter `<name>` only from iteration `first` to `last`; a single value means `first` to `niter_max`. Outside this range, LATTE zeroes the gradient | `1, niter_max` | no |
+| `<name>_update_iter` | integer list | Update parameter `<name>` only from iteration `first` to `last`; a single value means `first` to `niter_max`. Outside this range, LATTE zeroes the gradient. Not for `sx`, `sy`, `sz`, `st0` and `refl`; the updates of `refl` follow `yn_refl_image`, `refl_refine_niter` and `step_max_refl` | `1, niter_max` | no |
 
 LATTE ignores unrecognized step names without a warning. In 3-D, each parameter that has x and z versions also has a y version, for example `shot_grad_smoothy`.
 

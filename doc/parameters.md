@@ -192,7 +192,7 @@ With `yn_exchange_sr` in eikonal, the output follows the exchanged geometry: one
 
 LATTE stops when the file of a `model_aux` entry is missing. For a name in `model_name` or `model_update`, a missing file gives a zero model and only a warning. Always provide these files.
 
-Grid points with zero velocity lie outside the medium. LATTE sets the traveltime to zero there, skips source points in such cells, and returns a zero traveltime for receivers in such cells. A zero-velocity region can therefore model the air above topography.
+Grid points with zero velocity lie outside the medium. LATTE sets the traveltime to zero there, skips source points in such cells, and returns a zero traveltime for receivers in such cells. The adjoint field is zero there, and no adjoint flux crosses a face toward such a point, as at the edges of the model. A zero-velocity region can therefore model the air above topography.
 
 In tloc, the starting source coordinates and origin times of the inverted parameters come from `file_sx`, `file_sy`, `file_sz` and `file_st0`, not from the geometry. Each file holds one value per shot, in the order of the selected shots. Without such a file, the starting value is zero.
 

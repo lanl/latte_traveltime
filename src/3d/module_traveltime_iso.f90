@@ -1502,6 +1502,18 @@ contains
 
         end if
 
+        ! No adjoint flux crosses a face toward a point outside the medium (zero
+        ! velocity), as at the edges of the grid. The traveltime of forward_iso is
+        ! zero there, which would make such a face an outflow face that drains the
+        ! adjoint field of the medium; a huge traveltime makes it an inflow face of
+        ! a zero field. These points are fixed at zero like receiver points, so the
+        ! sweeps on the CPU and on the GPU skip them.
+        where (vp == 0)
+            tt = huge_value
+            lambda = 0
+            recrflag = .true.
+        end where
+
         !        ! This is to set lambda = 0 on boundaries, but does not make a difference
         !        ! when both source and receivers are inside and could be ignored.
         !        ! But when this is set, the preconditioner input residual must be negative to

@@ -383,7 +383,7 @@ At the end of an iteration, LATTE denoises the updated model when an updated par
 | `reg_smoothy`, `reg_smoothy_<name>` | float (iter) | Same in y (3-D) | `-1.0`, `dy` | no |
 | `reg_smoothz`, `reg_smoothz_<name>` | float (iter) | Same in z | `-1.0`, `dz` | no |
 
-For `vp` and `vs`, LATTE smooths the slowness 1/v.
+For `vp` and `vs`, LATTE smooths the slowness 1/v. In a model with zero-velocity points, e.g., air above topography, it smooths the slowness of the medium alone, normalized by the smoothed indicator of the medium, and keeps zero velocity at those points.
 
 ### TGpV
 

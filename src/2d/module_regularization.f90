@@ -135,7 +135,7 @@ contains
         logical, intent(in), optional :: smooth_inverse
 
         integer :: i, n1, n2
-        real, allocatable, dimension(:, :) :: mt, maux, mcoh
+        real, allocatable, dimension(:, :) :: mt, maux, mcoh, sn, wn
         character(len=1024) :: file_aux, file_coh
         real :: reg_smoothx, reg_smoothz
         type(andf_param) :: param
@@ -177,8 +177,24 @@ contains
                         call readpar_xfloat(file_parameter, 'reg_smoothz_'//tidy(name), reg_smoothz, 1.0*dz, iter*1.0)
                     end if
 
-                    if (present(smooth_inverse) .and. smooth_inverse) then
+                    if (present(smooth_inverse) .and. smooth_inverse .and. all(mt /= 0)) then
                         mt = 1.0/gauss_filt(1.0/mt, [reg_smoothz/dz, reg_smoothx/dx])
+                    else if (present(smooth_inverse) .and. smooth_inverse) then
+                        ! Points with zero velocity lie outside the medium, where the
+                        ! slowness would be infinite. Smooth the slowness of the medium
+                        ! alone, i.e., with zero slowness and zero weight outside, and
+                        ! divide by the smoothed weight; the points outside stay zero
+                        sn = zeros_like(mt)
+                        wn = zeros_like(mt)
+                        where (mt /= 0)
+                            sn = 1.0/mt
+                            wn = 1.0
+                        end where
+                        sn = gauss_filt(sn, [reg_smoothz/dz, reg_smoothx/dx])
+                        wn = gauss_filt(wn, [reg_smoothz/dz, reg_smoothx/dx])
+                        where (mt /= 0)
+                            mt = wn/sn
+                        end where
                     else
                         mt = gauss_filt(mt, [reg_smoothz/dz, reg_smoothx/dx])
                     end if

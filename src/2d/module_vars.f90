@@ -1,5 +1,5 @@
 !
-! © 2024. Triad National Security, LLC. All rights reserved.
+! © 2024-2026. Triad National Security, LLC. All rights reserved.
 !
 ! This program was produced under U.S. Government contract 89233218CNA000001
 ! for Los Alamos National Laboratory (LANL), which is operated by
@@ -258,7 +258,7 @@ contains
                 end where
 
                 if (vpvsratio_smoothx /= 0 .or. vpvsratio_smoothz /= 0) then
-                    r = gauss_filt(r, [vpvsratio_smoothz/dz, vpvsratio_smoothx/dx])
+                    r = smooth_vpvsratio(r, mvp /= 0 .and. mvs /= 0)
                 end if
                 r = clip(r, min_vpvsratio, max_vpvsratio)
 
@@ -291,7 +291,7 @@ contains
                 end where
 
                 if (vpvsratio_smoothx /= 0 .or. vpvsratio_smoothz /= 0) then
-                    r = gauss_filt(r, [vpvsratio_smoothz/dz, vpvsratio_smoothx/dx])
+                    r = smooth_vpvsratio(r, mvp /= 0 .and. mvs /= 0)
                 end if
                 r = clip(r, min_vpvsratio, max_vpvsratio)
 
@@ -301,6 +301,11 @@ contains
                         where (mvp == 0)
                             model_m(i)%array = 0
                         end where
+                        ! Where Vs is zero, e.g., in water, there is no ratio
+                        ! to constrain Vp, which keeps its value
+                        where (mvs == 0)
+                            model_m(i)%array = mvp
+                        end where
                     end if
                 end do
 
@@ -309,6 +314,35 @@ contains
         end if
 
     end subroutine clip_vpvsratio
+
+    !
+    !> Gaussian smoothing of the Vp/Vs ratio r in clip_vpvsratio. Points where Vp or
+    !> Vs is zero, e.g., in air or water, have no ratio (valid is false). When such
+    !> points exist, the smoothing uses the ratio of the valid points alone,
+    !> normalized by the smoothed indicator of the valid points, and leaves r
+    !> unchanged at the other points
+    !
+    function smooth_vpvsratio(r, valid) result(rs)
+
+        real, dimension(:, :), intent(in) :: r
+        logical, dimension(:, :), intent(in) :: valid
+        real, allocatable, dimension(:, :) :: rs
+
+        real, allocatable, dimension(:, :) :: w
+
+        if (all(valid)) then
+            rs = gauss_filt(r, [vpvsratio_smoothz/dz, vpvsratio_smoothx/dx])
+        else
+            rs = gauss_filt(merge(r, 0.0, valid), [vpvsratio_smoothz/dz, vpvsratio_smoothx/dx])
+            w = gauss_filt(merge(1.0, 0.0, valid), [vpvsratio_smoothz/dz, vpvsratio_smoothx/dx])
+            where (valid)
+                rs = rs/w
+            elsewhere
+                rs = r
+            end where
+        end if
+
+    end function smooth_vpvsratio
 
     !
     !> Zero regularization auxiliary variables

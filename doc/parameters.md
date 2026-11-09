@@ -111,7 +111,7 @@ LATTE builds the computational grid from the target spacing and these bounds: `o
 
 The solvers compute P traveltimes, and S traveltimes for `elastic-iso`, and write them to files named with `p` and `s`. So `data_name` must keep its default for now; LATTE reads it for media with other components, such as qP, qSV and qSH in TTI media. The values `acoustic-tti` and `elastic-tti` pass the input check, but no solver implements them.
 
-When LATTE enforces the Vp/Vs bounds, it adjusts Vs when Vs is updated, alone or together with Vp. It adjusts Vp when Vp is updated and Vs is fixed. Grid points with zero velocity keep zero velocity in this step.
+When LATTE enforces the Vp/Vs bounds, it adjusts Vs when Vs is updated, alone or together with Vp. It adjusts Vp when Vp is updated and Vs is fixed. Grid points with zero velocity keep zero velocity in this step. When LATTE adjusts Vp, Vp keeps its value where Vs is zero, e.g., in water. Points where Vp or Vs is zero have no Vp/Vs ratio, so the smoothing of the ratio uses the other points alone and normalizes the result by the smoothed indicator of those points.
 
 ---
 

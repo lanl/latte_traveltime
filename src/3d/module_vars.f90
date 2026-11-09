@@ -274,7 +274,7 @@ contains
 
                 if (vpvsratio_smoothx /= 0 .or. &
                     vpvsratio_smoothy /= 0 .or. vpvsratio_smoothz /= 0) then
-                    r = gauss_filt(r, [vpvsratio_smoothz/dz, vpvsratio_smoothy/dy, vpvsratio_smoothx/dx])
+                    r = smooth_vpvsratio(r, mvp /= 0 .and. mvs /= 0)
                 end if
                 r = clip(r, min_vpvsratio, max_vpvsratio)
 
@@ -308,7 +308,7 @@ contains
 
                 if (vpvsratio_smoothx /= 0 .or. &
                     vpvsratio_smoothy /= 0 .or. vpvsratio_smoothz /= 0) then
-                    r = gauss_filt(r, [vpvsratio_smoothz/dz, vpvsratio_smoothy/dy, vpvsratio_smoothx/dx])
+                    r = smooth_vpvsratio(r, mvp /= 0 .and. mvs /= 0)
                 end if
                 r = clip(r, min_vpvsratio, max_vpvsratio)
 
@@ -318,6 +318,11 @@ contains
                         where (mvp == 0)
                             model_m(i)%array = 0
                         end where
+                        ! Where Vs is zero, e.g., in water, there is no ratio
+                        ! to constrain Vp, which keeps its value
+                        where (mvs == 0)
+                            model_m(i)%array = mvp
+                        end where
                     end if
                 end do
 
@@ -326,6 +331,38 @@ contains
         end if
 
     end subroutine clip_vpvsratio
+
+    !
+    !> Gaussian smoothing of the Vp/Vs ratio r in clip_vpvsratio. Points where Vp or
+    !> Vs is zero, e.g., in air or water, have no ratio (valid is false). When such
+    !> points exist, the smoothing uses the ratio of the valid points alone,
+    !> normalized by the smoothed indicator of the valid points, and leaves r
+    !> unchanged at the other points
+    !
+    function smooth_vpvsratio(r, valid) result(rs)
+
+        real, dimension(:, :, :), intent(in) :: r
+        logical, dimension(:, :, :), intent(in) :: valid
+        real, allocatable, dimension(:, :, :) :: rs
+
+        real, allocatable, dimension(:, :, :) :: w
+        real, dimension(1:3) :: sigma
+
+        sigma = [vpvsratio_smoothz/dz, vpvsratio_smoothy/dy, vpvsratio_smoothx/dx]
+
+        if (all(valid)) then
+            rs = gauss_filt(r, sigma)
+        else
+            rs = gauss_filt(merge(r, 0.0, valid), sigma)
+            w = gauss_filt(merge(1.0, 0.0, valid), sigma)
+            where (valid)
+                rs = rs/w
+            elsewhere
+                rs = r
+            end where
+        end if
+
+    end function smooth_vpvsratio
 
     !
     !> Zero regularization auxiliary variables

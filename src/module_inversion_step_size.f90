@@ -338,7 +338,7 @@ contains
         else
 
             ! Setup filename prefix and filenames
-            filename = '/shot_'//num2str(gmtr(srcindex)%id)//'_'//'traveltime_'//tidy(component_name)//'.bin'
+            filename = '/shot_'//num2str(gmtr(srcindex)%id)//'_traveltime_'//tidy(component_name)//'.bin'
 
             ! Observed data
             file_recorded = dir_iter_record(iter)//tidy(filename)
@@ -355,6 +355,15 @@ contains
             seis_syn = load(file_synthetic, nr, nrefl + 1)
             seis_syn_prev = load(file_synthetic_prev, nr, nrefl + 1)
 
+            ! Missing picks (negative observed times) take no part in the step size,
+            ! as in the misfit: traveltime_residual skips negative values of its
+            ! second argument
+            where (seis_obs < 0)
+                seis_syn_prev = -1
+            end where
+
+            ! For step size computation, the order of syn/obs and syn_prev is irrelevant;
+            ! but the second argument must be processed as above based on obs
             call traveltime_residual(seis_syn, seis_syn_prev, r1, m1)
             call traveltime_residual(seis_obs, seis_syn_prev, r2, m2)
 
